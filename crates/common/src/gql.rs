@@ -190,9 +190,69 @@ impl OracleStakers {
     }
 }
 
+pub fn get_user_delegation(address: &str) -> Result<String, Error> {
+    let template = r#"
+    query GetDetailedTransactions {
+  transactions(
+    first: 1
+    sort: HEIGHT_DESC
+    owners: ["$addressvar"]
+    tags: [
+      { name: "Action", values: ["Set-Delegation"] }
+    ]
+  ) {
+    edges {
+      cursor
+      node {
+        id
+        owner {
+          address
+        }
+        tags {
+          name
+          value
+        }
+        block {
+          id
+          height
+        }
+      }
+    }
+    pageInfo {
+      hasNextPage
+    }
+  }
+}
+    "#;
+
+    let query = template.replace("$addressvar", address);
+
+    let body = json!({
+        "query": query,
+        "variables": {}
+    });
+
+    let req = ureq::post(format!("{ARWEAVE_GATEWAY}/graphql"))
+        .send_json(body)?
+        .body_mut()
+        .read_to_string()?;
+    let res: Value = serde_json::from_str(&req)?;
+
+    let id = res
+        .get("data")
+        .and_then(|v| v.get("transactions"))
+        .and_then(|v| v.get("edges"))
+        .and_then(|v| v.get(0))
+        .and_then(|v| v.get("node"))
+        .and_then(|v| v.get("id"))
+        .and_then(|v| v.as_str())
+        .ok_or(anyhow!("error: error accessing delegation msg id"))?;
+
+    Ok(id.to_string())
+}
 #[cfg(test)]
 mod test {
-    use crate::gql::OracleStakers;
+    use crate::gql::{OracleStakers, get_user_delegation};
     #[test]
     fn test_single_oracle_usds_stakers() {
         let mut oracle = OracleStakers::new("steth");
@@ -210,5 +270,12 @@ mod test {
         let id = oracle.id().unwrap();
         println!("ORACLE IDS: {:?}", id);
         assert_eq!(id.len(), 3);
+    }
+    #[test]
+    fn test_get_user_deleation() {
+        let address = "vZY2XY1RD9HIfWi8ift-1_DnHLDadZMWrufSh-_rKF0";
+        let id = get_user_delegation(address).unwrap();
+        println!("DELEGATION ID {id}");
+        assert_eq!(id.len(), 43);
     }
 }
