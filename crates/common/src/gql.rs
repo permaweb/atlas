@@ -16,9 +16,9 @@ pub enum Oracle {
 impl Oracle {
     pub fn resolve(&self) -> String {
         match self {
-            &Oracle::USDS => format!("[\"{}\"]", USDS_ORACLE_PID),
-            &Oracle::DAI => format!("[{}]", DAI_ORACLE_PID),
-            &Oracle::STETH => format!("[{}]", STETH_ORACLE_PID),
+            &Oracle::USDS => format!("[\"{USDS_ORACLE_PID}\"]"),
+            &Oracle::DAI => format!("[\"{DAI_ORACLE_PID}\"]"),
+            &Oracle::STETH => format!("[\"{STETH_ORACLE_PID}\"]"),
             &Oracle::All => {
                 format!("[\"{USDS_ORACLE_PID}\", \"{DAI_ORACLE_PID}\", \"{STETH_ORACLE_PID}\"]")
             }
@@ -195,7 +195,7 @@ mod test {
     use crate::gql::OracleStakers;
     #[test]
     fn test_single_oracle_usds_stakers() {
-        let mut oracle = OracleStakers::new("usds");
+        let mut oracle = OracleStakers::new("steth");
         let _res = oracle.build().unwrap().send().unwrap();
         let id = oracle.id().unwrap();
         println!("ORACLE ID: {:?}", id);
