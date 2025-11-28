@@ -8,6 +8,7 @@ pub fn parse_flp_balances_setting_res(txid: &str) -> Result<Vec<SetBalancesData>
     let data = download_tx_data(txid)?;
     let str_data = String::from_utf8(data)?;
     let mut rdr = Reader::from_reader(str_data.as_bytes());
+    // setting custom header given ao's flp Set-Balance dont have headers
     rdr.set_headers(StringRecord::from(vec!["eoa", "amount", "ar_address"]));
 
     for row in rdr.deserialize() {
