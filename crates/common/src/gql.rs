@@ -119,8 +119,6 @@ impl OracleStakers {
             .replace("$ownervar", AO_AUTHORITY)
             .replace("$oraclevar", &self.oracle.resolve());
 
-        println!("QUERY: {:?}", query);
-
         let vars = json!({
             "owner": AO_AUTHORITY,
             "oracle": self.oracle.resolve()
