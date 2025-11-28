@@ -33,11 +33,10 @@ mod tests {
 
     #[test]
     fn steth_set_balances_full_test() {
-        let mut oracle = OracleStakers::new("steth");
-        let last_update = oracle.build().unwrap().send().unwrap().id().unwrap();
-        let set_balances_parse_data =
-            parse_flp_balances_setting_res(last_update.get(0).unwrap()).unwrap();
-        println!("{:#?}", set_balances_parse_data);
-        assert!(set_balances_parse_data.len() > 0);
+        let oracle = OracleStakers::new("steth").build().unwrap().send().unwrap();
+        let last_update = oracle.last_update().unwrap();
+        let set_balances_parsed_data = parse_flp_balances_setting_res(&last_update).unwrap();
+        println!("{:#?}", set_balances_parsed_data);
+        assert!(set_balances_parsed_data.len() > 0);
     }
 }

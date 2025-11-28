@@ -32,7 +32,7 @@ pub struct OracleStakers {
     pub oracle: Oracle,
     query: Option<Value>,
     server_resp: Option<Value>,
-    id: Option<Vec<String>>,
+    last_updates: Option<Vec<String>>,
 }
 
 impl OracleStakers {
@@ -42,36 +42,36 @@ impl OracleStakers {
                 oracle: Oracle::USDS,
                 query: None,
                 server_resp: None,
-                id: None,
+                last_updates: None,
             },
             "dai" => OracleStakers {
                 oracle: Oracle::DAI,
                 query: None,
                 server_resp: None,
-                id: None,
+                last_updates: None,
             },
             "steth" => OracleStakers {
                 oracle: Oracle::STETH,
                 query: None,
                 server_resp: None,
-                id: None,
+                last_updates: None,
             },
             "all" => OracleStakers {
                 oracle: Oracle::All,
                 query: None,
                 server_resp: None,
-                id: None,
+                last_updates: None,
             },
             _ => OracleStakers {
                 oracle: Oracle::Unknown,
                 query: None,
                 server_resp: None,
-                id: None,
+                last_updates: None,
             },
         }
     }
 
-    pub fn build(&mut self) -> Result<&mut Self, Error> {
+    pub fn build(mut self) -> Result<Self, Error> {
         if self.oracle == Oracle::Unknown {
             return Err(anyhow!("error: unknown oracle type"));
         };
@@ -134,7 +134,7 @@ impl OracleStakers {
         Ok(self)
     }
 
-    pub fn send(&mut self) -> Result<&mut Self, Error> {
+    pub fn send(mut self) -> Result<Self, Error> {
         let url = format!("{ARWEAVE_GATEWAY}/graphql");
         let req = ureq::post(url)
             .send_json(self.query.clone())?
@@ -144,17 +144,30 @@ impl OracleStakers {
         self.server_resp = Some(res);
         Ok(self)
     }
-    pub fn id(&mut self) -> Result<Vec<String>, Error> {
-        if self.id.is_none() {
-            self.set_id()?;
+    pub fn last_updates(mut self) -> Result<Vec<String>, Error> {
+        if self.last_updates.is_none() {
+            self.set_last_updates()?;
         }
 
-        self.id
+        self.last_updates
             .clone()
             .ok_or(anyhow!("error while retrieving the message id"))
     }
-    fn set_id(&mut self) -> Result<Vec<String>, Error> {
-        if self.id.is_some() {
+
+    pub fn last_update(mut self) -> Result<String, Error> {
+        if self.last_updates.is_none() {
+            self.set_last_updates()?;
+        }
+
+        self.last_updates
+            .clone()
+            .ok_or(anyhow!("error while retrieving the message id"))?
+            .get(0)
+            .ok_or(anyhow!("error while retrieving the message id"))
+            .cloned()
+    }
+    fn set_last_updates(&mut self) -> Result<Vec<String>, Error> {
+        if self.last_updates.is_some() {
             return Err(anyhow!("error: message id is already set"));
         };
         let res = self.server_resp.clone().ok_or(anyhow!(
@@ -183,7 +196,7 @@ impl OracleStakers {
             return Err(anyhow!("error: no ao message id found for the given query"));
         }
 
-        self.id = Some(ids.clone());
+        self.last_updates = Some(ids.clone());
         Ok(ids)
     }
 }
@@ -253,20 +266,18 @@ mod test {
     use crate::gql::{OracleStakers, get_user_delegation};
     #[test]
     fn test_single_oracle_usds_stakers() {
-        let mut oracle = OracleStakers::new("steth");
-        let _res = oracle.build().unwrap().send().unwrap();
-        let id = oracle.id().unwrap();
-        println!("ORACLE ID: {:?}", id);
-        assert_eq!(id.len(), 1);
+        let oracle = OracleStakers::new("steth").build().unwrap().send().unwrap();
+        let id = oracle.last_update().unwrap();
+        println!("ORACLE LAST UPDATE: {:?}", id);
+        assert_eq!(id.len(), 43);
     }
     #[test]
     fn test_all_oracle_stakers() {
-        let mut oracle = OracleStakers::new("all");
-        let _res = oracle.build().unwrap().send().unwrap();
+        let oracle = OracleStakers::new("all").build().unwrap().send().unwrap();
         // noticied arweave gql gateway behavior is returning IDs in this order:
         // USDS / STETH / DAI
-        let id = oracle.id().unwrap();
-        println!("ORACLE IDS: {:?}", id);
+        let id = oracle.last_updates().unwrap();
+        println!("ORACLE LAST UPDATES: {:?}", id);
         assert_eq!(id.len(), 3);
     }
     #[test]
