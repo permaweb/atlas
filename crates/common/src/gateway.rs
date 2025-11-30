@@ -7,3 +7,12 @@ pub fn download_tx_data(txid: &str) -> Result<Vec<u8>, Error> {
     let mut req = ureq::get(url).call()?;
     Ok(req.body_mut().read_to_vec()?)
 }
+
+/// gets the winston balance of a given Arweave address
+pub fn get_winston_balance(address: &str) -> Result<f64, Error> {
+    let url = format!("{ARWEAVE_GATEWAY}/wallet/{address}/balance");
+    let mut req = ureq::get(url).call()?;
+    let winston = req.body_mut().read_to_string()?;
+    let winston = winston.parse::<f64>()?;
+    Ok(winston * 1e-12)
+}
