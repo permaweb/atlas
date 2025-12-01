@@ -40,7 +40,9 @@ impl Clickhouse {
         }
         let alters = [
             "alter table wallet_balances add column if not exists eoa String after wallet",
+            "alter table wallet_balances add column if not exists ar_balance String after amount",
             "alter table flp_positions add column if not exists eoa String after wallet",
+            "alter table flp_positions add column if not exists ar_amount String after amount",
         ];
         for stmt in alters {
             self.client.query(stmt).execute().await?;
@@ -110,6 +112,7 @@ pub struct WalletBalanceRow {
     pub wallet: String,
     pub eoa: String,
     pub amount: String,
+    pub ar_balance: String,
     pub tx_id: String,
 }
 
@@ -131,6 +134,7 @@ pub struct FlpPositionRow {
     pub project: String,
     pub factor: u32,
     pub amount: String,
+    pub ar_amount: String,
 }
 #[derive(Debug, Row, Serialize, serde::Deserialize)]
 struct CountRow {

@@ -1,13 +1,13 @@
 use anyhow::Result;
 use chrono::Utc;
-use common::{gql::OracleStakers, projects::Project};
+use common::{gateway::get_ar_balance, gql::OracleStakers, projects::Project};
 use flp::{
     set_balances::parse_flp_balances_setting_res,
     types::{DelegationsRes, MAX_FACTOR, SetBalancesData},
     wallet::get_wallet_delegations,
 };
 use futures::{StreamExt, stream};
-use rust_decimal::Decimal;
+use rust_decimal::{Decimal, prelude::FromPrimitive};
 use serde_json::to_string;
 use std::str::FromStr;
 
@@ -68,10 +68,11 @@ impl Indexer {
             }])
             .await?;
 
-        let pairs: Vec<(SetBalancesData, DelegationsRes)> =
+        let pairs: Vec<(SetBalancesData, DelegationsRes, Decimal)> =
             stream::iter(balances.into_iter().map(|entry| async move {
                 let delegation = load_delegations(entry.ar_address.clone()).await;
-                (entry, delegation)
+                let ar_balance = load_ar_balance(entry.ar_address.clone()).await;
+                (entry, delegation, ar_balance)
             }))
             .buffer_unordered(self.config.concurrency)
             .collect()
@@ -82,14 +83,15 @@ impl Indexer {
         let mut delegation_rows = Vec::with_capacity(pairs.len());
         let mut position_rows = Vec::new();
 
-        for (entry, delegation) in pairs {
+        for (entry, delegation, ar_balance) in pairs {
             let Some(amount_dec) = normalize_amount(&entry.amount, &ticker_owned) else {
                 continue;
             };
             let amount_str = amount_dec.to_string();
+            let ar_balance_str = ar_balance.to_string();
             println!(
-                "wallet {} eoa {} ticker {} balance {}",
-                entry.ar_address, entry.eoa, ticker_owned, amount_str
+                "wallet {} eoa {} ticker {} balance {} ar {}",
+                entry.ar_address, entry.eoa, ticker_owned, amount_str, ar_balance_str
             );
             balance_rows.push(WalletBalanceRow {
                 ts: now,
@@ -97,6 +99,7 @@ impl Indexer {
                 wallet: entry.ar_address.clone(),
                 eoa: entry.eoa.clone(),
                 amount: amount_str.clone(),
+                ar_balance: ar_balance_str.clone(),
                 tx_id: tx_id.clone(),
             });
             delegation_rows.push(WalletDelegationRow {
@@ -110,14 +113,16 @@ impl Indexer {
                     if delegated.is_zero() {
                         continue;
                     }
+                    let delegated_ar = delegated_amount(&ar_balance, pref.factor);
                     println!(
-                        "wallet {} eoa {} ticker {} project {} factor {} delegated {}",
+                        "wallet {} eoa {} ticker {} project {} factor {} delegated {} ar {}",
                         entry.ar_address,
                         entry.eoa,
                         ticker_owned,
                         pref.wallet_to,
                         pref.factor,
-                        delegated
+                        delegated,
+                        delegated_ar
                     );
                     position_rows.push(FlpPositionRow {
                         ts: now,
@@ -127,6 +132,7 @@ impl Indexer {
                         project: pref.wallet_to,
                         factor: pref.factor,
                         amount: delegated.to_string(),
+                        ar_amount: delegated_ar.to_string(),
                     });
                 }
             }
@@ -180,5 +186,12 @@ async fn load_delegations(address: String) -> DelegationsRes {
     match tokio::task::spawn_blocking(move || get_wallet_delegations(&address)).await {
         Ok(Ok(data)) => data,
         _ => DelegationsRes::pi_default(&fallback),
+    }
+}
+
+async fn load_ar_balance(address: String) -> Decimal {
+    match tokio::task::spawn_blocking(move || get_ar_balance(&address)).await {
+        Ok(Ok(value)) => Decimal::from_f64(value).unwrap_or(Decimal::ZERO),
+        _ => Decimal::ZERO,
     }
 }
