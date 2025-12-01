@@ -3,6 +3,7 @@ use crate::routes::{
 };
 use axum::{Router, extract::DefaultBodyLimit, routing::get};
 use tower_http::{cors::CorsLayer, limit::RequestBodyLimitLayer};
+use common::env::get_env_var;
 
 const REQ_SIZE_LIMIT: usize = 50 * 1024 * 1024; // 50 MB
 
@@ -30,7 +31,7 @@ async fn main() {
         .layer(RequestBodyLimitLayer::new(REQ_SIZE_LIMIT))
         .layer(cors);
     // 12 titans :D
-    let port = std::env::var("SERVER_PORT").unwrap_or_else(|_| "1212".to_string());
+    let port = get_env_var("SERVER_PORT").unwrap_or_else(|_| "1212".to_string());
     let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{port}"))
         .await
         .unwrap();
