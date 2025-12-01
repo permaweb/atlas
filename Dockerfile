@@ -16,7 +16,7 @@ WORKDIR /app
 COPY . .
 
 # Build the application
-RUN cargo build --release --bin load-s3-agent
+RUN cargo build --release --bin server
 
 # Runtime stage
 FROM debian:bookworm-slim
