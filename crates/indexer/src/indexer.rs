@@ -110,10 +110,12 @@ impl Indexer {
             for pref in delegation.delegation_prefs {
                 if Project::is_flp_project(&pref.wallet_to) {
                     let delegated = delegated_amount(&amount_dec, pref.factor);
-                    if delegated.is_zero() {
+                    let delegated_ar = delegated_amount(&ar_balance, pref.factor);
+                    // if the delegator had interacted with the FLP Bridge, have no more staked LSTs
+                    // but still delegating AR, track them
+                    if delegated.is_zero() && delegated_ar.is_zero() {
                         continue;
                     }
-                    let delegated_ar = delegated_amount(&ar_balance, pref.factor);
                     println!(
                         "wallet {} eoa {} ticker {} project {} factor {} delegated {} ar {}",
                         entry.ar_address,
