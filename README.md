@@ -1,5 +1,7 @@
 ## About
 
+A monitoring and indexing system for the [Fairlaunch Bridge](https://ao.arweave.net/#/mint) and its associated active [Fairlaunch Projects (FLPs)](https://ao.arweave.net/#/delegate/) - checkout the monitored FLPs [here](./crates/common/src/projects.rs)
+
 
 ## Using the HTTP API
 
@@ -10,6 +12,7 @@ Base endpoint: https://api.load.network/atlas/
 - `GET /` – health info.
 - `GET /wallet/delegations/{ar_address}` – latest Set-Delegation payload for a wallet.
 - `GET /oracle/{ticker}` – raw `Set-Balances` data payload for `usds`, `dai`, or `steth` oracles.
+- `GET oracle/feed/{ticker}` - returns the recent indexed oracle feeds -aggregated- with additional metadata
 - `GET /flp/delegators/{pid}` – merged snapshot of all tickers (LSTs + AR) delegating to a given FLP, including wallet/EVM mapping, factors, token amounts, and AR amounts.
 
 ## Using the workspace crates in Rust
