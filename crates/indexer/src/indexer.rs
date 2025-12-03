@@ -60,6 +60,7 @@ impl Indexer {
     }
 
     fn spawn_backfill(&self) {
+        println!("backfill called");
         let clickhouse = self.clickhouse.clone();
         tokio::spawn(async move {
             if let Err(err) = backfill::run(clickhouse).await {
@@ -107,10 +108,10 @@ impl Indexer {
             };
             let amount_str = amount_dec.to_string();
             let ar_balance_str = ar_balance.to_string();
-            println!(
-                "wallet {} eoa {} ticker {} balance {} ar {}",
-                entry.ar_address, entry.eoa, ticker_owned, amount_str, ar_balance_str
-            );
+            // println!(
+            //     "wallet {} eoa {} ticker {} balance {} ar {}",
+            //     entry.ar_address, entry.eoa, ticker_owned, amount_str, ar_balance_str
+            // );
             balance_rows.push(WalletBalanceRow {
                 ts: now,
                 ticker: ticker_owned.clone(),
@@ -134,16 +135,16 @@ impl Indexer {
                     if delegated.is_zero() && delegated_ar.is_zero() {
                         continue;
                     }
-                    println!(
-                        "wallet {} eoa {} ticker {} project {} factor {} delegated {} ar {}",
-                        entry.ar_address,
-                        entry.eoa,
-                        ticker_owned,
-                        pref.wallet_to,
-                        pref.factor,
-                        delegated,
-                        delegated_ar
-                    );
+                    // println!(
+                    //     "wallet {} eoa {} ticker {} project {} factor {} delegated {} ar {}",
+                    //     entry.ar_address,
+                    //     entry.eoa,
+                    //     ticker_owned,
+                    //     pref.wallet_to,
+                    //     pref.factor,
+                    //     delegated,
+                    //     delegated_ar
+                    // );
                     position_rows.push(FlpPositionRow {
                         ts: now,
                         ticker: ticker_owned.clone(),
@@ -179,11 +180,16 @@ impl Indexer {
             return Ok(());
         }
         println!(
-            "delegation mapping tx {} height {}",
+            "forward delegation mapping tx {} height {}",
             meta.tx_id, meta.height
         );
         if let Err(err) = self.store_delegation_mapping(&meta).await {
-            eprintln!("delegation mapping tx {} error {err:?}", meta.tx_id);
+            eprintln!("forward delegation mapping tx {} error {err:?}", meta.tx_id);
+        } else {
+            println!(
+                "forward delegation mapping stored tx {} height {}",
+                meta.tx_id, meta.height
+            );
         }
         Ok(())
     }

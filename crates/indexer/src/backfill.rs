@@ -11,7 +11,7 @@ use crate::clickhouse::{Clickhouse, DelegationMappingRow};
 
 const TARGET_HEIGHT: u32 = 1_807_500; // thats where the forward indexer starts
 const PAGE_SIZE: u32 = 100;
-const DELAY_SECS: u64 = 300;
+const DELAY_SECS: u64 = 1;
 
 pub async fn run(clickhouse: Clickhouse) -> Result<()> {
     println!("delegation backfill starting");
@@ -29,18 +29,37 @@ pub async fn run(clickhouse: Clickhouse) -> Result<()> {
             break;
         }
         for meta in page.mappings.iter() {
-            if meta.height < DELEGATION_PID_START_HEIGHT || meta.height > TARGET_HEIGHT {
+            if meta.height < DELEGATION_PID_START_HEIGHT {
+                println!(
+                    "backfill skipping tx {} height {} (< start)",
+                    meta.tx_id, meta.height
+                );
+                continue;
+            }
+            if meta.height > TARGET_HEIGHT {
+                println!(
+                    "backfill skipping tx {} height {} (> target)",
+                    meta.tx_id, meta.height
+                );
                 continue;
             }
             if clickhouse.has_delegation_mapping(&meta.tx_id).await? {
+                println!(
+                    "backfill skip tx {} height {} already stored",
+                    meta.tx_id, meta.height
+                );
                 continue;
             }
             println!(
                 "backfill indexing delegation mapping tx {} height {}",
                 meta.tx_id, meta.height
             );
-            if let Err(err) = process_tx(&clickhouse, meta).await {
-                eprintln!("backfill failed to index {}: {err:?}", meta.tx_id);
+            match process_tx(&clickhouse, meta).await {
+                Ok(count) => println!("backfill stored {} prefs for {}", count, meta.tx_id),
+                Err(err) => {
+                    eprintln!("backfill failed to index {}: {err:?}", meta.tx_id);
+                    continue;
+                }
             }
             sleep(Duration::from_secs(DELAY_SECS)).await;
         }
@@ -62,7 +81,7 @@ fn fetch_page(after: Option<&str>) -> Result<DelegationMappingsPage> {
     get_delegation_mappings(Some(PAGE_SIZE), after)
 }
 
-async fn process_tx(clickhouse: &Clickhouse, meta: &DelegationMappingMeta) -> Result<()> {
+async fn process_tx(clickhouse: &Clickhouse, meta: &DelegationMappingMeta) -> Result<usize> {
     let csv_rows = parse_delegation_mappings_res(&meta.tx_id)?;
     let ts = Utc::now();
     let rows: Vec<DelegationMappingRow> = csv_rows
@@ -76,6 +95,7 @@ async fn process_tx(clickhouse: &Clickhouse, meta: &DelegationMappingMeta) -> Re
             factor: row.factor,
         })
         .collect();
+    let count = rows.len();
     clickhouse.insert_delegation_mappings(&rows).await?;
-    Ok(())
+    Ok(count)
 }
