@@ -125,6 +125,44 @@ impl AtlasIndexerClient {
         }
         Ok(rows)
     }
+
+    pub async fn wallet_delegation_mappings(
+        &self,
+        wallet: &str,
+    ) -> Result<Vec<DelegationMappingHistory>, Error> {
+        let rows = self
+            .client
+            .query(
+                "select ts, height, tx_id, wallet_from, wallet_to, factor \
+                 from delegation_mappings \
+                 where wallet_from = ? \
+                 order by height desc",
+            )
+            .bind(wallet)
+            .fetch_all::<DelegationMappingRow>()
+            .await?;
+        if rows.is_empty() {
+            return Err(anyhow!("no delegation mappings found for wallet {wallet}"));
+        }
+        let mut map = BTreeMap::new();
+        for row in rows {
+            let key = (row.height, row.tx_id.clone());
+            let entry = map.entry(key).or_insert_with(|| DelegationMappingHistory {
+                ts: row.ts,
+                height: row.height,
+                tx_id: row.tx_id.clone(),
+                wallet: row.wallet_from.clone(),
+                preferences: Vec::new(),
+            });
+            entry.preferences.push(DelegationPreference {
+                wallet_to: row.wallet_to,
+                factor: row.factor,
+            });
+        }
+        let mut out: Vec<_> = map.into_values().collect();
+        out.sort_by(|a, b| b.height.cmp(&a.height));
+        Ok(out)
+    }
 }
 
 fn aggregate_totals(rows: &[FlpPositionRow]) -> Vec<ProjectTotal> {
@@ -218,4 +256,30 @@ pub struct OracleSnapshot {
     pub tx_id: String,
     pub total: f64,
     pub delegators: u64,
+}
+
+#[derive(Row, serde::Deserialize)]
+struct DelegationMappingRow {
+    #[serde(with = "clickhouse::serde::chrono::datetime64::millis")]
+    ts: DateTime<Utc>,
+    height: u32,
+    tx_id: String,
+    wallet_from: String,
+    wallet_to: String,
+    factor: u32,
+}
+
+#[derive(Serialize, Clone)]
+pub struct DelegationMappingHistory {
+    pub ts: DateTime<Utc>,
+    pub height: u32,
+    pub tx_id: String,
+    pub wallet: String,
+    pub preferences: Vec<DelegationPreference>,
+}
+
+#[derive(Serialize, Clone)]
+pub struct DelegationPreference {
+    pub wallet_to: String,
+    pub factor: u32,
 }

@@ -1,6 +1,7 @@
 use crate::routes::{
     get_ar_wallet_identity, get_eoa_wallet_identity, get_flp_snapshot_handler,
-    get_oracle_data_handler, get_oracle_feed, get_wallet_delegations_handler, handle_route,
+    get_oracle_data_handler, get_oracle_feed, get_wallet_delegation_mappings_history,
+    get_wallet_delegations_handler, handle_route,
 };
 use axum::{Router, extract::DefaultBodyLimit, routing::get};
 use common::env::get_env_var;
@@ -30,6 +31,10 @@ async fn main() {
         .route(
             "/wallet/identity/ar-wallet/{address}",
             get(get_ar_wallet_identity),
+        )
+        .route(
+            "/wallet/delegation-mappings/{address}",
+            get(get_wallet_delegation_mappings_history),
         )
         .route("/oracle/{ticker}", get(get_oracle_data_handler))
         .route("/oracle/feed/{ticker}", get(get_oracle_feed))

@@ -1,4 +1,7 @@
-use crate::{errors::ServerError, indexer::AtlasIndexerClient};
+use crate::{
+    errors::ServerError,
+    indexer::{AtlasIndexerClient, DelegationMappingHistory},
+};
 use axum::{Json, extract::Path};
 use common::gql::OracleStakers;
 use flp::csv_parser::parse_flp_balances_setting_res;
@@ -61,4 +64,13 @@ pub async fn get_oracle_feed(Path(ticker): Path<String>) -> Result<Json<Value>, 
         "recent_indexed_feeds": feed
     });
     Ok(Json(res))
+}
+
+pub async fn get_wallet_delegation_mappings_history(
+    Path(address): Path<String>,
+) -> Result<Json<Value>, ServerError> {
+    let client = AtlasIndexerClient::new()?;
+    let history: Vec<DelegationMappingHistory> =
+        client.wallet_delegation_mappings(&address).await?;
+    Ok(Json(serde_json::to_value(&history)?))
 }
