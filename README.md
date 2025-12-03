@@ -11,6 +11,7 @@ Base endpoint: https://api.load.network/atlas/
 
 - `GET /` – health info.
 - `GET /wallet/delegations/{ar_address}` – latest Set-Delegation payload for a wallet.
+- `GET /wallet/delegation-mappings/{ar_address}` - delegation preference history over Arweave blockheight, goes back to the start of _delegation process deployment.
 - `GET /oracle/{ticker}` – raw `Set-Balances` data payload for `usds`, `dai`, or `steth` oracles.
 - `GET oracle/feed/{ticker}` - returns the recent indexed oracle feeds -aggregated- with additional metadata
 - `GET /flp/delegators/{pid}` – merged snapshot of all tickers (LSTs + AR) delegating to a given FLP, including wallet/EVM mapping, factors, token amounts, and AR amounts.

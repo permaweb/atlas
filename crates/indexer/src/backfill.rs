@@ -9,7 +9,7 @@ use tokio::time::{Duration, sleep};
 
 use crate::clickhouse::{Clickhouse, DelegationMappingRow};
 
-const TARGET_HEIGHT: u32 = 1_807_500;
+const TARGET_HEIGHT: u32 = 1_807_500; // thats where the forward indexer starts
 const PAGE_SIZE: u32 = 100;
 const DELAY_SECS: u64 = 300;
 
