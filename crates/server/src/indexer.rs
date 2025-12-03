@@ -11,17 +11,18 @@ pub struct AtlasIndexerClient {
 }
 
 impl AtlasIndexerClient {
-    pub fn new() -> Result<Self, Error> {
+    pub async fn new() -> Result<Self, Error> {
         let url = get_env_var("CLICKHOUSE_URL").unwrap_or_else(|_| "http://localhost:8123".into());
         let user = get_env_var("CLICKHOUSE_USER").unwrap_or_else(|_| "default".into());
         let password = get_env_var("CLICKHOUSE_PASSWORD").unwrap_or_default();
         let database =
             get_env_var("CLICKHOUSE_DATABASE").unwrap_or_else(|_| "atlas_oracles".into());
-        let client = clickhouse::Client::default()
-            .with_url(url)
-            .with_user(user)
-            .with_password(password)
-            .with_database(database);
+        let admin = clickhouse::Client::default()
+            .with_url(&url)
+            .with_user(&user)
+            .with_password(&password);
+        let client = admin.clone().with_database(&database);
+        ensure_schema(&admin, &client, &database).await?;
         Ok(Self { client })
     }
 
@@ -163,6 +164,37 @@ impl AtlasIndexerClient {
         out.sort_by(|a, b| b.height.cmp(&a.height));
         Ok(out)
     }
+}
+
+async fn ensure_schema(
+    admin: &clickhouse::Client,
+    client: &clickhouse::Client,
+    database: &str,
+) -> Result<(), Error> {
+    let create_db = format!("create database if not exists {}", database);
+    admin.query(&create_db).execute().await?;
+    let stmts = [
+        "create table if not exists oracle_snapshots(ts DateTime64(3), ticker String, tx_id String) engine=MergeTree order by (ticker, ts)",
+        "create table if not exists wallet_balances(ts DateTime64(3), ticker String, wallet String, eoa String, amount String, tx_id String) engine=ReplacingMergeTree order by (ticker, wallet, ts)",
+        "create table if not exists wallet_delegations(ts DateTime64(3), wallet String, payload String) engine=ReplacingMergeTree order by (wallet, ts)",
+        "create table if not exists flp_positions(ts DateTime64(3), ticker String, wallet String, eoa String, project String, factor UInt32, amount String) engine=ReplacingMergeTree order by (project, wallet, ts)",
+        "create table if not exists delegation_mappings(ts DateTime64(3), height UInt32, tx_id String, wallet_from String, wallet_to String, factor UInt32) engine=ReplacingMergeTree order by (height, tx_id, wallet_from, wallet_to)",
+    ];
+    for stmt in stmts {
+        client.query(stmt).execute().await?;
+    }
+    let alters = [
+        "alter table wallet_balances add column if not exists eoa String after wallet",
+        "alter table wallet_balances add column if not exists ar_balance String after amount",
+        "alter table flp_positions add column if not exists eoa String after wallet",
+        "alter table flp_positions add column if not exists ar_amount String after amount",
+        "alter table flp_positions modify column project String",
+        "alter table delegation_mappings add column if not exists ts DateTime64(3) default now()",
+    ];
+    for stmt in alters {
+        client.query(stmt).execute().await?;
+    }
+    Ok(())
 }
 
 fn aggregate_totals(rows: &[FlpPositionRow]) -> Vec<ProjectTotal> {
