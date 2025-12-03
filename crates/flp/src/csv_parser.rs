@@ -1,4 +1,4 @@
-use crate::types::SetBalancesData;
+use crate::types::{DelegationMappingsRow, SetBalancesData};
 use anyhow::Error;
 use common::gateway::download_tx_data;
 use csv::{Reader, StringRecord};
@@ -18,10 +18,25 @@ pub fn parse_flp_balances_setting_res(txid: &str) -> Result<Vec<SetBalancesData>
     Ok(res)
 }
 
+pub fn parse_delegation_mappings_res(txid: &str) -> Result<Vec<DelegationMappingsRow>, Error> {
+    let mut res: Vec<DelegationMappingsRow> = Vec::new();
+    let data = download_tx_data(txid)?;
+    let str_data = String::from_utf8(data)?;
+    let mut rdr = Reader::from_reader(str_data.as_bytes());
+    // setting custom header given ao's msg Delegation-Mappings dont have headers
+    rdr.set_headers(StringRecord::from(vec!["walletFrom", "walletTo", "factor"]));
+
+    for row in rdr.deserialize() {
+        let record: DelegationMappingsRow = row?;
+        res.push(record);
+    }
+    Ok(res)
+}
+
 #[cfg(test)]
 
 mod tests {
-    use crate::csv_parser::parse_flp_balances_setting_res;
+    use crate::csv_parser::{parse_delegation_mappings_res, parse_flp_balances_setting_res};
     use common::gql::OracleStakers;
 
     #[test]
@@ -39,5 +54,13 @@ mod tests {
         let set_balances_parsed_data = parse_flp_balances_setting_res(&last_update).unwrap();
         println!("{:#?}", set_balances_parsed_data);
         assert!(set_balances_parsed_data.len() > 0);
+    }
+
+    #[test]
+    fn delegation_mappings_parse_test() {
+        let txid: &str = "RIBK6CgQk8mvXk_0AGbGZYkSHZIUtLVeqWLJhIvl7-o";
+        let res = parse_delegation_mappings_res(txid).unwrap();
+        println!(" {:?} {:?}", res, res.len());
+        assert!(res.len() == 6898)
     }
 }

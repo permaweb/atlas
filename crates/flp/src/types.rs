@@ -15,7 +15,7 @@ pub struct WalletDelegations {
 pub struct DelegationMappingsRow {
     pub wallet_from: String,
     pub wallet_to: String,
-    pub factor: u32
+    pub factor: u32,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
