@@ -17,6 +17,7 @@ Base endpoint: https://api.load.network/atlas/
 - `GET /oracle/{ticker}` – raw `Set-Balances` data payload for `usds`, `dai`, or `steth` oracles.
 - `GET oracle/feed/{ticker}` - returns the recent indexed oracle feeds -aggregated- with additional metadata
 - `GET /flp/delegators/{pid}` – merged snapshot of all tickers (LSTs + AR) delegating to a given FLP, including wallet/EVM mapping, factors, token amounts, and AR amounts.
+- `GET /flp/delegators/multi?limit=100` - returns a list of delegators that delegate to at least 2 distinct FLPs.
 
 ## Using the workspace crates in Rust
 
