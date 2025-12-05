@@ -4,3 +4,4 @@ pub mod env;
 pub mod gateway;
 pub mod gql;
 pub mod projects;
+pub mod minting;
