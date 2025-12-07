@@ -20,6 +20,7 @@ Base endpoint: https://api.load.network/atlas/
 - `GET /flp/delegators/multi?limit=100` - returns a list of delegators that delegate to at least 2 distinct FLPs.
 - `GET /flp/minting/{project}` - returns the latest FLP's cycle `Own-Minting-Report` data
 - `GET /flp/metadata/all` - return a vector of the tracked FLPs and their metadata
+- `GET /flp/{project}/cycles?ticker={ticker}&limit={n}` - returns the total delegated assets for the `ticker`'s oracle (LST) cycle per `project`
 
 ## Using the workspace crates in Rust
 

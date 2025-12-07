@@ -120,10 +120,9 @@ pub async fn get_project_cycle_totals(
         .unwrap_or(25);
     let ticker = params.get("ticker").cloned();
     let client = AtlasIndexerClient::new().await?;
-    let rows: Vec<ProjectCycleTotal> =
-        client
-            .project_cycle_totals(&project, ticker.as_deref(), limit)
-            .await?;
+    let rows: Vec<ProjectCycleTotal> = client
+        .project_cycle_totals(&project, ticker.as_deref(), limit)
+        .await?;
     Ok(Json(serde_json::to_value(&rows)?))
 }
 

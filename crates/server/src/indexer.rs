@@ -251,10 +251,7 @@ impl AtlasIndexerClient {
         if let Some(t) = ticker {
             query = query.bind(t);
         }
-        let rows = query
-            .bind(limit)
-            .fetch_all::<ProjectCycleTotal>()
-            .await?;
+        let rows = query.bind(limit).fetch_all::<ProjectCycleTotal>().await?;
         if rows.is_empty() {
             return Err(anyhow!("no cycle totals found for project {project}"));
         }
