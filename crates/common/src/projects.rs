@@ -111,7 +111,7 @@ impl Project {
         matches!(
             pid,
             INTERNAL_PI_PID
-            | PI_LEGACY_PID
+                | PI_LEGACY_PID
                 | PI_PID
                 | LOAD_PID
                 | APUS_PID
@@ -150,7 +150,7 @@ impl Project {
             Project::pixl(),
             Project::vela(),
             Project::inf(),
-            Project::pi_legacy()
+            Project::pi_legacy(),
         ]
     }
 }
