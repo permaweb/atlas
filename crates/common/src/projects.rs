@@ -20,6 +20,7 @@ pub const ARIO_PID: &str = "rW7h9J9jE2Xp36y4SKn2HgZaOuzRmbMfBRPwrFFifHE";
 pub const PIXL_PID: &str = "3eZ6_ry6FD9CB58ImCQs6Qx_rJdDUGhz-D2W1AqzHD8";
 pub const VELA_PID: &str = "8TRsYFzbhp97Er5bFJL4Xofa4Txv4fv8S0szEscqopU";
 pub const INF_PID: &str = "LnFIQUwAdMZ9LEWlfQ7VZ3zJOW-0p8Irc_2gAVshs3w";
+pub const PI_LEGACY_PID: &str = "rxxU4g-7tUHGvF28W2l53hxarpbaFR4NaSnOaxx6MIE";
 
 // projects tokens
 pub const PI_TOKEN: &str = "4hXj_E-5fAKmo4E8KjgQvuDJKAFk9P2grhycVmISDLs";
@@ -101,6 +102,7 @@ impl Project {
     project!(pixl, "PIXL Token", "PIXL", PIXL_PID, PIXL_TOKEN, 6u32);
     project!(vela, "Vela", "VELA", VELA_PID, VELA_TOKEN, 18u32);
     project!(inf, "Influence Market", "INF", INF_PID, INF_TOKEN, 18u32);
+    project!(pi_legacy, "PI Legacy", "PI", PI_LEGACY_PID, PI_TOKEN, 12u32);
     // todo! add more active FLPs if any
 }
 
@@ -109,6 +111,7 @@ impl Project {
         matches!(
             pid,
             INTERNAL_PI_PID
+            | PI_LEGACY_PID
                 | PI_PID
                 | LOAD_PID
                 | APUS_PID
@@ -147,6 +150,7 @@ impl Project {
             Project::pixl(),
             Project::vela(),
             Project::inf(),
+            Project::pi_legacy()
         ]
     }
 }
