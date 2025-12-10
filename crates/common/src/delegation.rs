@@ -71,11 +71,11 @@ pub fn get_user_delegation_txid(last_delegation_txid: &str) -> Result<String, Er
     Ok(id.to_string())
 }
 
-pub fn get_user_last_delegation_txid(address: &str) -> Result<String, Error> {
+pub fn get_user_last_delegation_txid(address: &str) -> Result<Vec<String>, Error> {
     let template = r#"
     query GetDetailedTransactions {
   transactions(
-    first: 1
+    first: 10
     sort: HEIGHT_DESC
     owners: ["$addressvar"]
     tags: [
@@ -119,20 +119,41 @@ pub fn get_user_last_delegation_txid(address: &str) -> Result<String, Error> {
         .read_to_string()?;
     let res: Value = serde_json::from_str(&req)?;
 
-    let id = res
+    let edges = res
         .get("data")
         .and_then(|v| v.get("transactions"))
         .and_then(|v| v.get("edges"))
-        .and_then(|v| v.get(0))
-        .and_then(|v| v.get("node"))
-        .and_then(|v| v.get("id"))
-        .and_then(|v| v.as_str())
-        // default to the PI address as if a wallet has no Set-Delegation message record
-        // the FLP bridge system default for 100% of delegation preference to $PI
-        .ok_or(anyhow!("error: error accessing last delegation msg id"))
-        .unwrap_or(INTERNAL_PI_PID);
+        .and_then(|v| v.as_array());
 
-    Ok(id.to_string())
+    if let Some(edges) = edges {
+        let mut nodes = Vec::new();
+        for edge in edges {
+            let Some(node) = edge.get("node") else { continue };
+            let Some(id) = node.get("id").and_then(|v| v.as_str()) else {
+                continue;
+            };
+            let height = node
+                .get("block")
+                .and_then(|v| v.get("height"))
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0);
+            nodes.push((id.to_string(), height));
+        }
+        if nodes.is_empty() {
+            return Ok(vec![INTERNAL_PI_PID.to_string()]);
+        }
+        let max_height = nodes.iter().map(|(_, h)| *h).max().unwrap_or(0);
+        let ids: Vec<String> = nodes
+            .into_iter()
+            .filter(|(_, h)| *h == max_height)
+            .map(|(id, _)| id)
+            .collect();
+        if ids.is_empty() {
+            return Ok(vec![INTERNAL_PI_PID.to_string()]);
+        }
+        return Ok(ids);
+    }
+    Ok(vec![INTERNAL_PI_PID.to_string()])
 }
 
 /// Action : Delegation-Mappings

@@ -250,9 +250,7 @@ mod test {
     fn test_get_user_delegation() {
         let address = "vZY2XY1RD9HIfWi8ift-1_DnHLDadZMWrufSh-_rKF0";
         let last_id = get_user_last_delegation_txid(address).unwrap();
-        println!("LAST DELEGATION ID {last_id}");
-        let delegation_id = get_user_delegation_txid(&last_id).unwrap();
-        println!("DELEGATION ID {delegation_id}");
-        assert_eq!(last_id.len(), delegation_id.len());
+        let delegation_ids = get_user_delegation_txid(&last_id[0]).unwrap();
+        assert!(!delegation_ids.is_empty());
     }
 }

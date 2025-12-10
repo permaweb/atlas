@@ -1,5 +1,5 @@
-use crate::types::DelegationsRes;
-use anyhow::Error;
+use crate::types::{DelegationsRes, MAX_FACTOR};
+use anyhow::{Error, anyhow};
 use common::gateway::download_tx_data;
 use common::gql::{get_user_delegation_txid, get_user_last_delegation_txid};
 use common::projects::INTERNAL_PI_PID;
@@ -9,14 +9,26 @@ use common::projects::INTERNAL_PI_PID;
 /// 2- extracts the actual delegation data from its `Pushed-For` tag
 /// (msg sent from AO_AUTHORITY to user address with From-Process & Pushed-For tags)
 pub fn get_wallet_delegations(address: &str) -> Result<DelegationsRes, Error> {
-    let last_delegation_txid = get_user_last_delegation_txid(address)?;
-    if last_delegation_txid == INTERNAL_PI_PID {
-        return Ok(DelegationsRes::pi_default(address));
+    let last_ids = get_user_last_delegation_txid(address)?;
+    let mut fallback = None;
+    for last_delegation_txid in last_ids {
+        if last_delegation_txid == INTERNAL_PI_PID {
+            return Ok(DelegationsRes::pi_default(address));
+        }
+        let delegation_txid = get_user_delegation_txid(&last_delegation_txid)?;
+        let delegation_data = download_tx_data(&delegation_txid)?;
+        let mut res: DelegationsRes = serde_json::from_slice(&delegation_data)?;
+        let total_factor = res
+            .total_factor
+            .unwrap_or_else(|| res.delegation_prefs.iter().map(|p| p.factor).sum());
+        if total_factor >= MAX_FACTOR {
+            res.delegation_msg_id = Some(last_delegation_txid);
+            return Ok(res);
+        }
+        res.delegation_msg_id = Some(last_delegation_txid);
+        fallback = Some(res);
     }
-    let delegation_txid = get_user_delegation_txid(&last_delegation_txid)?;
-    let delegation_data = download_tx_data(&delegation_txid)?;
-    let res: DelegationsRes = serde_json::from_slice(&delegation_data)?;
-    Ok(res)
+    fallback.ok_or_else(|| anyhow!("error: no delegation preferences found"))
 }
 
 #[cfg(test)]
