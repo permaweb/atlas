@@ -27,7 +27,7 @@ pub struct DelegationsRes {
     pub total_factor: Option<u32>,
     pub wallet: Option<String>,
     pub delegation_prefs: Vec<WalletDelegations>,
-    pub delegation_msg_id: Option<String>
+    pub delegation_msg_id: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -61,7 +61,7 @@ impl DelegationsRes {
             total_factor: Some(MAX_FACTOR),
             wallet: Some(address.to_string()),
             delegation_prefs: vec![preference],
-            delegation_msg_id: Some("not found".to_string())
+            delegation_msg_id: Some("not found".to_string()),
         }
     }
 }

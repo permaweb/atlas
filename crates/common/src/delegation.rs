@@ -128,7 +128,9 @@ pub fn get_user_last_delegation_txid(address: &str) -> Result<Vec<String>, Error
     if let Some(edges) = edges {
         let mut nodes = Vec::new();
         for edge in edges {
-            let Some(node) = edge.get("node") else { continue };
+            let Some(node) = edge.get("node") else {
+                continue;
+            };
             let Some(id) = node.get("id").and_then(|v| v.as_str()) else {
                 continue;
             };

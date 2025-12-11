@@ -2,3 +2,4 @@
 .env
 debug.txt
 /crates/server/src/bin*
+crates/indexer/src/bin/debug_flp_cycle.rs
