@@ -1,10 +1,11 @@
 use crate::{
     errors::ServerError,
     indexer::{
-        AtlasIndexerClient, DelegationHeight, DelegationMappingHistory, MultiDelegator,
-        ProjectCycleTotal,
+        AtlasIndexerClient, DelegationHeight, DelegationMappingHistory, ExplorerBlock,
+        ExplorerDayStats, MultiDelegator, ProjectCycleTotal,
     },
 };
+use anyhow::anyhow;
 use axum::{
     Json,
     extract::{Path, Query},
@@ -13,6 +14,7 @@ use common::{gql::OracleStakers, minting::get_flp_own_minting_report, projects::
 use flp::csv_parser::parse_flp_balances_setting_res;
 use flp::json_parser::parse_own_minting_report;
 use flp::wallet::get_wallet_delegations;
+use chrono::{NaiveDate, Utc};
 use serde_json::{Value, json};
 use std::collections::HashMap;
 
@@ -137,4 +139,44 @@ pub async fn get_flp_own_minting_report_handler(
 pub async fn get_all_projects_metadata_handler() -> Result<Json<Value>, ServerError> {
     let projects = Project::get_all();
     Ok(Json(serde_json::to_value(&projects)?))
+}
+
+pub async fn get_explorer_blocks(
+    Query(params): Query<HashMap<String, String>>,
+) -> Result<Json<Value>, ServerError> {
+    let limit = params
+        .get("limit")
+        .and_then(|v| v.parse::<u64>().ok())
+        .filter(|v| *v > 0)
+        .unwrap_or(100);
+    let client = AtlasIndexerClient::new().await?;
+    let rows: Vec<ExplorerBlock> = client.latest_explorer_blocks(limit).await?;
+    Ok(Json(serde_json::to_value(&rows)?))
+}
+
+pub async fn get_explorer_day_stats(
+    Query(params): Query<HashMap<String, String>>,
+) -> Result<Json<Value>, ServerError> {
+    let day_str = params
+        .get("day")
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| Utc::now().date_naive().to_string());
+    let day = NaiveDate::parse_from_str(&day_str, "%Y-%m-%d")
+        .map_err(|_| ServerError::from(anyhow!("invalid day format (expected YYYY-MM-DD)")))?;
+    let client = AtlasIndexerClient::new().await?;
+    let stats: ExplorerDayStats = client.daily_explorer_stats(day).await?;
+    Ok(Json(serde_json::to_value(&stats)?))
+}
+
+pub async fn get_explorer_recent_days(
+    Query(params): Query<HashMap<String, String>>,
+) -> Result<Json<Value>, ServerError> {
+    let limit = params
+        .get("limit")
+        .and_then(|v| v.parse::<u64>().ok())
+        .filter(|v| *v > 0)
+        .unwrap_or(7);
+    let client = AtlasIndexerClient::new().await?;
+    let rows = client.recent_explorer_days(limit).await?;
+    Ok(Json(serde_json::to_value(&rows)?))
 }

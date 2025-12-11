@@ -21,6 +21,9 @@ Base endpoint: https://api.load.network/atlas/
 - `GET /flp/minting/{project}` - returns the latest FLP's cycle `Own-Minting-Report` data
 - `GET /flp/metadata/all` - return a vector of the tracked FLPs and their metadata
 - `GET /flp/{project}/cycles?ticker={ticker}&limit={n}` - returns the total delegated assets for the `ticker`'s oracle (LST) cycle per `project`
+- `GET /explorer/blocks?limit=100` -  emits the last N indexed blocks.
+- `GET /explorer/day?day=YYYY-MM-DD` - returns the aggregated stats for a given date (defaults to `today`, rejects malformed dates).
+- `GET /explorer/days?limit=N` - default to past 7 days
 
 ## Using the workspace crates in Rust
 

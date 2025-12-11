@@ -1,6 +1,7 @@
 use crate::routes::{
     get_all_projects_metadata_handler, get_ar_wallet_identity, get_delegation_mapping_heights,
-    get_eoa_wallet_identity, get_flp_own_minting_report_handler, get_flp_snapshot_handler,
+    get_eoa_wallet_identity, get_explorer_blocks, get_explorer_day_stats,
+    get_explorer_recent_days, get_flp_own_minting_report_handler, get_flp_snapshot_handler,
     get_multi_project_delegators, get_oracle_data_handler, get_oracle_feed,
     get_project_cycle_totals, get_wallet_delegation_mappings_history,
     get_wallet_delegations_handler, handle_route,
@@ -53,6 +54,9 @@ async fn main() {
             get(get_flp_own_minting_report_handler),
         )
         .route("/flp/metadata/all", get(get_all_projects_metadata_handler))
+        .route("/explorer/blocks", get(get_explorer_blocks))
+        .route("/explorer/day", get(get_explorer_day_stats))
+        .route("/explorer/days", get(get_explorer_recent_days))
         .layer(DefaultBodyLimit::max(REQ_SIZE_LIMIT))
         .layer(RequestBodyLimitLayer::new(REQ_SIZE_LIMIT))
         .layer(cors);

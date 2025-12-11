@@ -1,5 +1,5 @@
 use anyhow::{Error, anyhow};
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDate, Utc};
 use clickhouse::Row;
 use common::env::get_env_var;
 use serde::Serialize;
@@ -258,6 +258,89 @@ impl AtlasIndexerClient {
         }
         Ok(rows)
     }
+
+    pub async fn latest_explorer_blocks(&self, limit: u64) -> Result<Vec<ExplorerBlock>, Error> {
+        let rows = self
+            .client
+            .query(
+                "select ts, height, tx_count, eval_count, transfer_count, \
+                 new_process_count, new_module_count, active_users, active_processes, \
+                 tx_count_rolling, processes_rolling, modules_rolling \
+                 from atlas_explorer \
+                 order by height desc \
+                 limit ?",
+            )
+            .bind(limit)
+            .fetch_all::<ExplorerBlockRow>()
+            .await?;
+        Ok(rows.into_iter().map(|row| row.into()).collect())
+    }
+
+    pub async fn daily_explorer_stats(&self, day: NaiveDate) -> Result<ExplorerDayStats, Error> {
+        let start = day
+            .and_hms_opt(0, 0, 0)
+            .unwrap()
+            .and_utc()
+            .timestamp();
+        let end = day
+            .succ_opt()
+            .unwrap_or(day)
+            .and_hms_opt(0, 0, 0)
+            .unwrap()
+            .and_utc()
+            .timestamp();
+        let rows = self
+            .client
+            .query(
+                "select count() as blocks, sum(tx_count) as txs, \
+                 max(tx_count_rolling) as txs_roll \
+                 from atlas_explorer \
+                 where toUnixTimestamp(ts) >= ? and toUnixTimestamp(ts) < ?",
+            )
+            .bind(start)
+            .bind(end)
+            .fetch_all::<ExplorerDayAggRow>()
+            .await?;
+        let stats = rows.into_iter().next().unwrap_or(ExplorerDayAggRow {
+            blocks: 0,
+            txs: 0,
+            txs_roll: 0,
+        });
+        Ok(ExplorerDayStats {
+            day,
+            blocks: stats.blocks,
+            txs: stats.txs,
+            txs_roll: stats.txs_roll,
+        })
+    }
+
+    pub async fn recent_explorer_days(&self, limit: u64) -> Result<Vec<ExplorerDayStats>, Error> {
+        let rows = self
+            .client
+            .query(
+                "select toInt64(toUnixTimestamp(toStartOfDay(ts))) as day_ts, \
+                 count() as blocks, sum(tx_count) as txs, \
+                 max(tx_count_rolling) as txs_roll \
+                 from atlas_explorer \
+                 group by day_ts \
+                 order by day_ts desc \
+                 limit ?",
+            )
+            .bind(limit)
+            .fetch_all::<ExplorerRecentDayRow>()
+            .await?;
+        Ok(rows
+            .into_iter()
+            .filter_map(|row| {
+                DateTime::<Utc>::from_timestamp(row.day_ts, 0).map(|dt| ExplorerDayStats {
+                    day: dt.date_naive(),
+                    blocks: row.blocks,
+                    txs: row.txs,
+                    txs_roll: row.txs_roll,
+                })
+            })
+            .collect())
+    }
 }
 
 async fn ensure_schema(
@@ -273,6 +356,7 @@ async fn ensure_schema(
         "create table if not exists wallet_delegations(ts DateTime64(3), wallet String, payload String) engine=ReplacingMergeTree order by (wallet, ts)",
         "create table if not exists flp_positions(ts DateTime64(3), ticker String, wallet String, eoa String, project String, factor UInt32, amount String) engine=ReplacingMergeTree order by (project, wallet, ts)",
         "create table if not exists delegation_mappings(ts DateTime64(3), height UInt32, tx_id String, wallet_from String, wallet_to String, factor UInt32) engine=ReplacingMergeTree order by (height, tx_id, wallet_from, wallet_to)",
+        "create table if not exists atlas_explorer(ts DateTime64(3), height UInt64, tx_count UInt64, eval_count UInt64, transfer_count UInt64, new_process_count UInt64, new_module_count UInt64, active_users UInt64, active_processes UInt64, tx_count_rolling UInt64, processes_rolling UInt64, modules_rolling UInt64) engine=ReplacingMergeTree order by height",
     ];
     for stmt in stmts {
         client.query(stmt).execute().await?;
@@ -446,4 +530,80 @@ pub struct ProjectCycleTotal {
     pub usds_total: f64,
     pub dai_total: f64,
     pub steth_total: f64,
+}
+
+#[derive(Row, serde::Deserialize)]
+struct ExplorerBlockRow {
+    #[serde(with = "clickhouse::serde::chrono::datetime64::millis")]
+    ts: DateTime<Utc>,
+    height: u64,
+    tx_count: u64,
+    eval_count: u64,
+    transfer_count: u64,
+    new_process_count: u64,
+    new_module_count: u64,
+    active_users: u64,
+    active_processes: u64,
+    tx_count_rolling: u64,
+    processes_rolling: u64,
+    modules_rolling: u64,
+}
+
+impl From<ExplorerBlockRow> for ExplorerBlock {
+    fn from(row: ExplorerBlockRow) -> Self {
+        ExplorerBlock {
+            ts: row.ts,
+            height: row.height,
+            tx_count: row.tx_count,
+            eval_count: row.eval_count,
+            transfer_count: row.transfer_count,
+            new_process_count: row.new_process_count,
+            new_module_count: row.new_module_count,
+            active_users: row.active_users,
+            active_processes: row.active_processes,
+            tx_count_rolling: row.tx_count_rolling,
+            processes_rolling: row.processes_rolling,
+            modules_rolling: row.modules_rolling,
+        }
+    }
+}
+
+#[derive(Serialize, Clone)]
+pub struct ExplorerBlock {
+    #[serde(with = "clickhouse::serde::chrono::datetime64::millis")]
+    pub ts: DateTime<Utc>,
+    pub height: u64,
+    pub tx_count: u64,
+    pub eval_count: u64,
+    pub transfer_count: u64,
+    pub new_process_count: u64,
+    pub new_module_count: u64,
+    pub active_users: u64,
+    pub active_processes: u64,
+    pub tx_count_rolling: u64,
+    pub processes_rolling: u64,
+    pub modules_rolling: u64,
+}
+
+#[derive(Row, serde::Deserialize)]
+struct ExplorerDayAggRow {
+    blocks: u64,
+    txs: u64,
+    txs_roll: u64,
+}
+
+#[derive(Serialize, Clone)]
+pub struct ExplorerDayStats {
+    pub day: NaiveDate,
+    pub blocks: u64,
+    pub txs: u64,
+    pub txs_roll: u64,
+}
+
+#[derive(Row, serde::Deserialize)]
+struct ExplorerRecentDayRow {
+    day_ts: i64,
+    blocks: u64,
+    txs: u64,
+    txs_roll: u64,
 }

@@ -9,6 +9,7 @@ pub struct ServerError(anyhow::Error);
 
 impl IntoResponse for ServerError {
     fn into_response(self) -> Response {
+        eprintln!("server error: {:?}", self.0);
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(json!({
