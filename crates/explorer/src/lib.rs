@@ -1,8 +1,13 @@
 use anyhow::{Result, anyhow};
-use serde::{Deserialize, Serialize};
-use serde_json::json;
-use std::collections::{BTreeMap, HashSet};
 pub mod update_stats_gap;
+use serde::{Deserialize, Serialize};
+use serde_json::{Value, json};
+use std::{
+    collections::{BTreeMap, HashSet},
+    thread,
+    time::Duration,
+};
+use update_stats_gap::LATEST_AGG_STATS_SET;
 
 const ENDPOINT: &str = "https://permagate.io/graphql";
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -132,9 +137,9 @@ pub fn aggregate_block(txs: &[AoTx]) -> Vec<BlockStats> {
     let mut mod_roll = 0;
     for (height, block) in grouped {
         let ts = block
-            .get(0)
-            .and_then(|t| Some(t.block_timestamp.to_string()))
-            .and_then(|timestamp| Some(timestamp.parse::<u64>().unwrap_or_default()));
+            .first()
+            .map(|t| t.block_timestamp.max(0) as u64)
+            .unwrap_or(0);
         let tx_count = block.len() as u64;
         let eval_count = block
             .iter()
@@ -164,8 +169,8 @@ pub fn aggregate_block(txs: &[AoTx]) -> Vec<BlockStats> {
         proc_roll += new_process_count;
         mod_roll += new_module_count;
         out.push(BlockStats {
-            height: height,
-            timestamp: ts.unwrap_or(0),
+            height,
+            timestamp: ts,
             tx_count,
             eval_count,
             transfer_count,
@@ -179,6 +184,30 @@ pub fn aggregate_block(txs: &[AoTx]) -> Vec<BlockStats> {
         });
     }
     out
+}
+
+pub fn resume_stats_indexer<F>(handler: F) -> Result<()>
+where
+    F: FnMut(&BlockStats) -> Result<()>,
+{
+    run_stats_indexer_from(LATEST_AGG_STATS_SET.clone(), handler)
+}
+
+pub fn run_stats_indexer_from<F>(mut last: BlockStats, mut handler: F) -> Result<()>
+where
+    F: FnMut(&BlockStats) -> Result<()>,
+{
+    let mut height = last.height + 1;
+    loop {
+        let tip = current_network_height()?;
+        while height <= tip {
+            let stats = build_block_stats(height, &last)?;
+            handler(&stats)?;
+            last = stats;
+            height += 1;
+        }
+        thread::sleep(Duration::from_secs(10));
+    }
 }
 
 impl AoTx {
@@ -263,6 +292,69 @@ struct Tag {
 struct PageInfo {
     #[serde(rename = "hasNextPage")]
     has_next_page: bool,
+}
+
+fn build_block_stats(height: u64, last: &BlockStats) -> Result<BlockStats> {
+    let blocks = aggregate_block_full(height as u32)?;
+    if let Some(mut stats) = blocks.into_iter().find(|s| s.height == height) {
+        finalize_block_stats(&mut stats, last)?;
+        Ok(stats)
+    } else {
+        let ts = fetch_block_timestamp(height)?;
+        Ok(empty_block_stats(height, ts, last))
+    }
+}
+
+fn finalize_block_stats(stats: &mut BlockStats, last: &BlockStats) -> Result<()> {
+    if stats.timestamp == 0 {
+        stats.timestamp = fetch_block_timestamp(stats.height)?;
+    }
+    stats.tx_count_rolling = last.tx_count_rolling + stats.tx_count;
+    stats.processes_rolling = last.processes_rolling + stats.new_process_count;
+    stats.modules_rolling = last.modules_rolling + stats.new_module_count;
+    Ok(())
+}
+
+fn empty_block_stats(height: u64, timestamp: u64, last: &BlockStats) -> BlockStats {
+    BlockStats {
+        height,
+        timestamp,
+        tx_count: 0,
+        eval_count: 0,
+        transfer_count: 0,
+        new_process_count: 0,
+        new_module_count: 0,
+        active_users: 0,
+        active_processes: 0,
+        tx_count_rolling: last.tx_count_rolling,
+        processes_rolling: last.processes_rolling,
+        modules_rolling: last.modules_rolling,
+    }
+}
+
+fn current_network_height() -> Result<u64> {
+    #[derive(Deserialize)]
+    struct NetworkInfo {
+        height: u64,
+    }
+    let mut res = ureq::get("https://arweave.net/info").call()?;
+    let body = res.body_mut().read_to_string()?;
+    let info: NetworkInfo = serde_json::from_str(&body)?;
+    Ok(info.height)
+}
+
+fn fetch_block_timestamp(height: u64) -> Result<u64> {
+    let url = format!("https://arweave.net/block/height/{height}");
+    let mut res = ureq::get(&url).call()?;
+    let body = res.body_mut().read_to_string()?;
+    let value: Value = serde_json::from_str(&body)?;
+    Ok(value
+        .get("timestamp")
+        .and_then(|v| {
+            v.as_u64()
+                .or_else(|| v.as_str().and_then(|s| s.parse::<u64>().ok()))
+        })
+        .unwrap_or(0))
 }
 
 #[cfg(test)]

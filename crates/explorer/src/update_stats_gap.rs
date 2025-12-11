@@ -1,6 +1,5 @@
 use crate::BlockStats;
-pub const ATLAS_AGG_STATS_START_BLOCK: u64 = 1802760;  // Nov 26 2025 00:07:14 AM (GMT)
-
+pub const ATLAS_AGG_STATS_START_BLOCK: u64 = 1802760; // Nov 26 2025 00:07:14 AM (GMT)
 
 // agg_stats last message:
 //
@@ -22,7 +21,7 @@ pub const ATLAS_AGG_STATS_START_BLOCK: u64 = 1802760;  // Nov 26 2025 00:07:14 A
 pub const LATEST_AGG_STATS_SET: BlockStats = BlockStats {
     // height: 1806550, // onchain msg block
     // timestamp: 1764594637, // onchain timestamp Mon, 01 Dec 2025 13:10:37 GMT (UTC)
-    height: 1802758, // the blockheight that match the last agg_stats msg
+    height: 1802758,       // the blockheight that match the last agg_stats msg
     timestamp: 1764114408, // the timestamp of the matching blockheight
     tx_count: 125657,
     eval_count: 69,
@@ -33,5 +32,5 @@ pub const LATEST_AGG_STATS_SET: BlockStats = BlockStats {
     active_processes: 883,
     tx_count_rolling: 2771411066,
     processes_rolling: 540463,
-    modules_rolling: 10157
+    modules_rolling: 10157,
 };
