@@ -1,10 +1,10 @@
 use anyhow::{Result, anyhow};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::collections::{BTreeMap, HashSet};
 
 const ENDPOINT: &str = "https://permagate.io/graphql";
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AoTx {
     pub id: String,
     pub block_height: u64,
@@ -15,14 +15,14 @@ pub struct AoTx {
     pub process: Option<String>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AoPage {
     pub txs: Vec<AoTx>,
     pub cursor: Option<String>,
     pub has_more: bool,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct BlockStats {
     pub timestamp: u64,
     pub tx_count: u64,
@@ -208,30 +208,30 @@ impl AoTx {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 struct GraphResponse {
     data: Option<GraphData>,
 }
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 struct GraphData {
     transactions: GraphTransactions,
 }
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 struct GraphTransactions {
     edges: Vec<Edge>,
     #[serde(rename = "pageInfo")]
     page_info: PageInfo,
 }
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 struct Edge {
     cursor: String,
     node: GraphNode,
 }
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 struct GraphNode {
     id: String,
     owner: Owner,
@@ -239,24 +239,24 @@ struct GraphNode {
     tags: Vec<Tag>,
 }
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 struct Owner {
     address: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 struct Block {
     height: u64,
     timestamp: Option<i64>,
 }
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 struct Tag {
     name: String,
     value: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 struct PageInfo {
     #[serde(rename = "hasNextPage")]
     has_next_page: bool,
