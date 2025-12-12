@@ -289,7 +289,12 @@ impl AtlasIndexerClient {
             .client
             .query(
                 "select count() as blocks, sum(tx_count) as txs, \
-                 max(tx_count_rolling) as txs_roll \
+                 sum(eval_count) as evals, sum(transfer_count) as transfers, \
+                 sum(new_process_count) as new_processes, sum(new_module_count) as new_modules, \
+                 sum(active_users) as active_users, sum(active_processes) as active_processes, \
+                 max(tx_count_rolling) as txs_roll, \
+                 max(processes_rolling) as processes_roll, \
+                 max(modules_rolling) as modules_roll \
                  from atlas_explorer \
                  where toUnixTimestamp(ts) >= ? and toUnixTimestamp(ts) < ?",
             )
@@ -300,13 +305,29 @@ impl AtlasIndexerClient {
         let stats = rows.into_iter().next().unwrap_or(ExplorerDayAggRow {
             blocks: 0,
             txs: 0,
+            evals: 0,
+            transfers: 0,
+            new_processes: 0,
+            new_modules: 0,
+            active_users: 0,
+            active_processes: 0,
             txs_roll: 0,
+            processes_roll: 0,
+            modules_roll: 0,
         });
         Ok(ExplorerDayStats {
             day,
             blocks: stats.blocks,
             txs: stats.txs,
+            evals: stats.evals,
+            transfers: stats.transfers,
+            new_processes: stats.new_processes,
+            new_modules: stats.new_modules,
+            active_users: stats.active_users,
+            active_processes: stats.active_processes,
             txs_roll: stats.txs_roll,
+            processes_roll: stats.processes_roll,
+            modules_roll: stats.modules_roll,
         })
     }
 
@@ -316,7 +337,12 @@ impl AtlasIndexerClient {
             .query(
                 "select toInt64(toUnixTimestamp(toStartOfDay(ts))) as day_ts, \
                  count() as blocks, sum(tx_count) as txs, \
-                 max(tx_count_rolling) as txs_roll \
+                 sum(eval_count) as evals, sum(transfer_count) as transfers, \
+                 sum(new_process_count) as new_processes, sum(new_module_count) as new_modules, \
+                 sum(active_users) as active_users, sum(active_processes) as active_processes, \
+                 max(tx_count_rolling) as txs_roll, \
+                 max(processes_rolling) as processes_roll, \
+                 max(modules_rolling) as modules_roll \
                  from atlas_explorer \
                  group by day_ts \
                  order by day_ts desc \
@@ -332,7 +358,15 @@ impl AtlasIndexerClient {
                     day: dt.date_naive(),
                     blocks: row.blocks,
                     txs: row.txs,
+                    evals: row.evals,
+                    transfers: row.transfers,
+                    new_processes: row.new_processes,
+                    new_modules: row.new_modules,
+                    active_users: row.active_users,
+                    active_processes: row.active_processes,
                     txs_roll: row.txs_roll,
+                    processes_roll: row.processes_roll,
+                    modules_roll: row.modules_roll,
                 })
             })
             .collect())
@@ -585,7 +619,15 @@ pub struct ExplorerBlock {
 struct ExplorerDayAggRow {
     blocks: u64,
     txs: u64,
+    evals: u64,
+    transfers: u64,
+    new_processes: u64,
+    new_modules: u64,
+    active_users: u64,
+    active_processes: u64,
     txs_roll: u64,
+    processes_roll: u64,
+    modules_roll: u64,
 }
 
 #[derive(Serialize, Clone)]
@@ -593,7 +635,15 @@ pub struct ExplorerDayStats {
     pub day: NaiveDate,
     pub blocks: u64,
     pub txs: u64,
+    pub evals: u64,
+    pub transfers: u64,
+    pub new_processes: u64,
+    pub new_modules: u64,
+    pub active_users: u64,
+    pub active_processes: u64,
     pub txs_roll: u64,
+    pub processes_roll: u64,
+    pub modules_roll: u64,
 }
 
 #[derive(Row, serde::Deserialize)]
@@ -601,5 +651,13 @@ struct ExplorerRecentDayRow {
     day_ts: i64,
     blocks: u64,
     txs: u64,
+    evals: u64,
+    transfers: u64,
+    new_processes: u64,
+    new_modules: u64,
+    active_users: u64,
+    active_processes: u64,
     txs_roll: u64,
+    processes_roll: u64,
+    modules_roll: u64,
 }
