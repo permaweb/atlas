@@ -9,12 +9,13 @@
 /// - type B follows Header-Case tags key format
 /// - type A start blockheight: 1_594_020 -- Jan 22 2025
 /// - type B start blockheight: 1_616_999 --  Feb 25 2025
-use crate::constants::{ARWEAVE_GATEWAY, DATA_PROTOCOL_A_START, DATA_PROTOCOL_B_START};
 use anyhow::{Error, anyhow};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
-#[derive(Debug, Serialize, Deserialize)]
+const MAINNET_ARWEAVE_GATEWAY: &str = "https://permagate.io";
+
+#[derive(Debug, Serialize, Deserialize, Clone, Copy)]
 pub enum DataProtocol {
     A,
     B,
@@ -123,7 +124,7 @@ query aoMainnet {
         "variables": {}
     });
 
-    let req = ureq::post(format!("{ARWEAVE_GATEWAY}/graphql"))
+    let req = ureq::post(format!("{MAINNET_ARWEAVE_GATEWAY}/graphql"))
         .send_json(body)?
         .body_mut()
         .read_to_string()?;

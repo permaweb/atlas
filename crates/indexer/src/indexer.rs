@@ -1,9 +1,14 @@
 use anyhow::Result;
 use chrono::Utc;
 use common::{
+    constants::{DATA_PROTOCOL_A_START, DATA_PROTOCOL_B_START},
     delegation::{DelegationMappingMeta, DelegationMappingsPage, get_delegation_mappings},
     gateway::get_ar_balance,
     gql::OracleStakers,
+    mainnet::{
+        DataProtocol, MainnetBlockMessagesMeta, MainnetBlockMessagesPage,
+        scan_arweave_block_for_msgs,
+    },
     projects::Project,
 };
 use flp::{
@@ -15,13 +20,17 @@ use futures::{StreamExt, stream};
 use rust_decimal::{Decimal, prelude::FromPrimitive};
 use serde_json::to_string;
 use std::str::FromStr;
-use tokio::runtime::Handle;
+use tokio::{
+    runtime::Handle,
+    time::{Duration, sleep},
+};
 
 use crate::{
     backfill,
     clickhouse::{
-        AtlasExplorerRow, Clickhouse, DelegationMappingRow, FlpPositionRow, OracleSnapshotRow,
-        WalletBalanceRow, WalletDelegationRow,
+        AtlasExplorerRow, Clickhouse, DelegationMappingRow, FlpPositionRow, MainnetBlockStateRow,
+        MainnetMessageRow, MainnetMessageTagRow, OracleSnapshotRow, WalletBalanceRow,
+        WalletDelegationRow,
     },
     config::Config,
 };
@@ -40,6 +49,7 @@ impl Indexer {
     pub async fn run(&self) -> Result<()> {
         self.clickhouse.ensure().await?;
         self.spawn_explorer_bridge().await?;
+        self.spawn_mainnet_indexer().await?;
         // self.spawn_backfill();
         println!("indexer ready with tickers {:?}", self.config.tickers);
         self.run_once().await?;
@@ -82,6 +92,25 @@ impl Indexer {
                 eprintln!("atlas explorer indexer error: {err:?}");
             }
         });
+        Ok(())
+    }
+
+    async fn spawn_mainnet_indexer(&self) -> Result<()> {
+        for (protocol, start) in [
+            (DataProtocol::A, DATA_PROTOCOL_A_START),
+            (DataProtocol::B, DATA_PROTOCOL_B_START),
+        ] {
+            let clickhouse = self.clickhouse.clone();
+            tokio::spawn(async move {
+                if let Err(err) = run_mainnet_worker(clickhouse, protocol, start).await {
+                    eprintln!(
+                        "mainnet indexer error protocol={} start={} err={err:?}",
+                        protocol_label(protocol),
+                        start
+                    );
+                }
+            });
+        }
         Ok(())
     }
 
@@ -282,4 +311,157 @@ async fn build_mapping_rows(meta: &DelegationMappingMeta) -> Result<Vec<Delegati
             factor: row.factor,
         })
         .collect())
+}
+
+async fn run_mainnet_worker(
+    clickhouse: Clickhouse,
+    protocol: DataProtocol,
+    start: u32,
+) -> Result<()> {
+    let protocol_name = protocol_label(protocol).to_string();
+    let mut height = start;
+    let mut cursor = None;
+    if let Some(state) = clickhouse
+        .fetch_mainnet_block_state(&protocol_name)
+        .await?
+    {
+        if state.last_cursor.is_empty() {
+            height = state
+                .last_complete_height
+                .saturating_add(1)
+                .max(start);
+        } else {
+            height = state.last_complete_height.max(start);
+            cursor = Some(state.last_cursor);
+        }
+    }
+    println!(
+        "mainnet protocol {} starting at height {}",
+        protocol_name, height
+    );
+    loop {
+        let page = match fetch_mainnet_page(protocol, height, cursor.clone()).await {
+            Ok(page) => page,
+            Err(err) => {
+                if is_empty_block_error(&err) {
+                    cursor = None;
+                    println!("mainnet protocol {} height {} empty", protocol_name, height);
+                    let state_row = MainnetBlockStateRow {
+                        updated_at: Utc::now(),
+                        protocol: protocol_name.clone(),
+                        last_complete_height: height,
+                        last_cursor: String::new(),
+                    };
+                    clickhouse
+                        .insert_mainnet_block_state(&[state_row])
+                        .await?;
+                    height = height.saturating_add(1);
+                } else {
+                    eprintln!(
+                        "mainnet fetch error protocol={} height={} err={err:?}",
+                        protocol_name, height
+                    );
+                    let delay = if is_rate_limit_error(&err) {
+                        Duration::from_secs(5)
+                    } else {
+                        Duration::from_secs(1)
+                    };
+                    sleep(delay).await;
+                }
+                continue;
+            }
+        };
+        let ts = Utc::now();
+        let mut message_rows = Vec::with_capacity(page.mappings.len());
+        let mut tag_rows = Vec::new();
+        for meta in page.mappings {
+            let MainnetBlockMessagesMeta {
+                msg_id,
+                owner,
+                recipient,
+                block_height,
+                block_timestamp,
+                bundled_in,
+                data_size,
+                tags,
+            } = meta;
+            let msg_id_for_tags = msg_id.clone();
+            message_rows.push(MainnetMessageRow {
+                ts,
+                protocol: protocol_name.clone(),
+                block_height,
+                block_timestamp,
+                msg_id,
+                owner,
+                recipient,
+                bundled_in,
+                data_size,
+            });
+            for tag in tags {
+                tag_rows.push(MainnetMessageTagRow {
+                    ts,
+                    protocol: protocol_name.clone(),
+                    block_height,
+                    msg_id: msg_id_for_tags.clone(),
+                    tag_key: tag.key,
+                    tag_value: tag.value,
+                });
+            }
+        }
+        clickhouse.insert_mainnet_messages(&message_rows).await?;
+        clickhouse
+            .insert_mainnet_message_tags(&tag_rows)
+            .await?;
+        cursor = if page.has_next_page {
+            page.end_cursor.clone()
+        } else {
+            None
+        };
+        let state_row = MainnetBlockStateRow {
+            updated_at: ts,
+            protocol: protocol_name.clone(),
+            last_complete_height: height,
+            last_cursor: cursor.clone().unwrap_or_default(),
+        };
+        clickhouse
+            .insert_mainnet_block_state(&[state_row])
+            .await?;
+        println!(
+            "mainnet protocol {} height {} stored {} msgs",
+            protocol_name,
+            height,
+            message_rows.len()
+        );
+        if cursor.is_none() {
+            height = height.saturating_add(1);
+        }
+        sleep(Duration::from_secs(5)).await;
+    }
+}
+
+async fn fetch_mainnet_page(
+    protocol: DataProtocol,
+    height: u32,
+    cursor: Option<String>,
+) -> Result<MainnetBlockMessagesPage> {
+    Ok(tokio::task::spawn_blocking(move || {
+        scan_arweave_block_for_msgs(protocol, height, cursor.as_deref())
+    })
+    .await??)
+}
+
+fn protocol_label(protocol: DataProtocol) -> &'static str {
+    match protocol {
+        DataProtocol::A => "A",
+        DataProtocol::B => "B",
+    }
+}
+
+fn is_empty_block_error(err: &anyhow::Error) -> bool {
+    let msg = err.to_string();
+    msg.contains("no ao message id found")
+}
+
+fn is_rate_limit_error(err: &anyhow::Error) -> bool {
+    err.to_string().contains("http status: 429")
 }
