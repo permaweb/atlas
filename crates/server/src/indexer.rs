@@ -1,7 +1,10 @@
 use anyhow::{Error, anyhow};
 use chrono::{DateTime, NaiveDate, Utc};
 use clickhouse::Row;
-use common::env::get_env_var;
+use common::{
+    constants::{DATA_PROTOCOL_A_START, DATA_PROTOCOL_B_START},
+    env::get_env_var,
+};
 use serde::Serialize;
 use std::collections::BTreeMap;
 
@@ -832,8 +835,10 @@ struct MainnetProgressRow {
 
 impl From<MainnetProgressRow> for MainnetProtocolInfo {
     fn from(row: MainnetProgressRow) -> Self {
+        let protocol = row.protocol;
         MainnetProtocolInfo {
-            protocol: row.protocol,
+            start_height: protocol_start(&protocol),
+            protocol,
             block_height: row.block_height,
             indexed_at: row.indexed_at,
         }
@@ -844,8 +849,17 @@ impl From<MainnetProgressRow> for MainnetProtocolInfo {
 pub struct MainnetProtocolInfo {
     pub protocol: String,
     pub block_height: u32,
+    pub start_height: u32,
     #[serde(with = "chrono::serde::ts_milliseconds")]
     pub indexed_at: DateTime<Utc>,
+}
+
+fn protocol_start(protocol: &str) -> u32 {
+    match protocol {
+        "A" => DATA_PROTOCOL_A_START,
+        "B" => DATA_PROTOCOL_B_START,
+        _ => 0,
+    }
 }
 
 #[derive(Row, serde::Deserialize)]
