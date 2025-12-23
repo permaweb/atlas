@@ -201,7 +201,7 @@ query aoMainnet {
 
 #[cfg(test)]
 mod tests {
-    use crate::{constants::DATA_PROTOCOL_A_START, mainnet::{DataProtocol, scan_arweave_block_for_msgs}};
+    use crate::{constants::{DATA_PROTOCOL_A_START, DATA_PROTOCOL_B_START}, mainnet::{DataProtocol, scan_arweave_block_for_msgs}};
 
     #[test]
     fn scan_protocol_a_genesis_test() {
@@ -209,5 +209,20 @@ mod tests {
        println!("{:?}", messages);
        assert_eq!(messages.mappings[0].msg_id, "kfwvyN59sihMeSFjBP44ujI_as4ZEQWERrS83ordEkY");
        assert!(!messages.has_next_page);
+    }
+
+    #[test]
+    fn scan_protocol_b_genesis_test() {
+       let messages = scan_arweave_block_for_msgs(DataProtocol::B, DATA_PROTOCOL_B_START, None).unwrap();
+       println!("{:?}", messages);
+       assert_eq!(messages.mappings[0].msg_id, "FY3NP7-edCq3RIE0aiSxbme2n428XdiTvp3gJKbMISQ");
+       assert!(!messages.has_next_page);
+    }
+
+    #[test]
+    // simulates an messages-empty block
+    fn scan_protocol_a_pre_genesis_test() {
+       let err = scan_arweave_block_for_msgs(DataProtocol::A, DATA_PROTOCOL_A_START - 1, None);
+       assert!(err.is_err());
     }
 }
