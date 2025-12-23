@@ -1,24 +1,23 @@
 /// common utils for retrieving, filtering and sorting
-/// ao mainnet network data (ao.N.1 messages) extracted from 
+/// ao mainnet network data (ao.N.1 messages) extracted from
 /// Arweave blocks using GQL gateways.
-/// 
+///
 /// the mainnet have 2 type of tags for messages, in Atlas,
 /// we label them as type A and type B:
-/// 
+///
 /// - type A follows lower-case tags key format
 /// - type B follows Header-Case tags key format
 /// - type A start blockheight: 1_594_020 -- Jan 22 2025
 /// - type B start blockheight: 1_616_999 --  Feb 25 2025
-
-use crate::constants::{DATA_PROTOCOL_A_START, DATA_PROTOCOL_B_START, ARWEAVE_GATEWAY};
-use serde::{Serialize, Deserialize};
-use serde_json::{json, Value};
+use crate::constants::{ARWEAVE_GATEWAY, DATA_PROTOCOL_A_START, DATA_PROTOCOL_B_START};
 use anyhow::{Error, anyhow};
+use serde::{Deserialize, Serialize};
+use serde_json::{Value, json};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum DataProtocol {
     A,
-    B
+    B,
 }
 
 impl DataProtocol {
@@ -33,12 +32,15 @@ impl DataProtocol {
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct Tag {
     pub key: String,
-    pub value: String
+    pub value: String,
 }
 
 impl Tag {
     pub fn from_kv(key: &str, value: &str) -> Self {
-        Self { key: key.to_string(), value: value.to_string() }
+        Self {
+            key: key.to_string(),
+            value: value.to_string(),
+        }
     }
 }
 
@@ -48,7 +50,7 @@ pub struct MainnetBlockMessagesMeta {
     pub owner: String,
     pub block_height: u32,
     pub block_timestamp: u64,
-    pub tags: Vec<Tag>
+    pub tags: Vec<Tag>,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -63,7 +65,6 @@ pub fn scan_arweave_block_for_msgs(
     blockheight: u32,
     after: Option<&str>,
 ) -> Result<MainnetBlockMessagesPage, Error> {
-
     let query_tags = data_protocol.tags();
     let template = r#"
 
@@ -105,7 +106,8 @@ query aoMainnet {
         .unwrap_or_default();
     let query = template
         .replace("$dataprotocol_tags", &query_tags)
-        .replace("$afterclause", &after_clause).replace("$blockheight", &blockheight.to_string());
+        .replace("$afterclause", &after_clause)
+        .replace("$blockheight", &blockheight.to_string());
 
     let body = json!({
         "query": query,
@@ -172,20 +174,19 @@ query aoMainnet {
             })
             .unwrap_or_default();
 
-    let owner = node
-        .get("owner")
-        .and_then(|o| o.get("address"))
-        .and_then(|v| v.as_str())
-        .unwrap_or_default()
-        .to_string();
-
+        let owner = node
+            .get("owner")
+            .and_then(|o| o.get("address"))
+            .and_then(|v| v.as_str())
+            .unwrap_or_default()
+            .to_string();
 
         out.push(MainnetBlockMessagesMeta {
             msg_id: id.to_string(),
             block_height,
             block_timestamp,
             owner,
-            tags
+            tags,
         });
     }
 
@@ -201,28 +202,39 @@ query aoMainnet {
 
 #[cfg(test)]
 mod tests {
-    use crate::{constants::{DATA_PROTOCOL_A_START, DATA_PROTOCOL_B_START}, mainnet::{DataProtocol, scan_arweave_block_for_msgs}};
+    use crate::{
+        constants::{DATA_PROTOCOL_A_START, DATA_PROTOCOL_B_START},
+        mainnet::{DataProtocol, scan_arweave_block_for_msgs},
+    };
 
     #[test]
     fn scan_protocol_a_genesis_test() {
-       let messages = scan_arweave_block_for_msgs(DataProtocol::A, DATA_PROTOCOL_A_START, None).unwrap();
-       println!("{:?}", messages);
-       assert_eq!(messages.mappings[0].msg_id, "kfwvyN59sihMeSFjBP44ujI_as4ZEQWERrS83ordEkY");
-       assert!(!messages.has_next_page);
+        let messages =
+            scan_arweave_block_for_msgs(DataProtocol::A, DATA_PROTOCOL_A_START, None).unwrap();
+        println!("{:?}", messages);
+        assert_eq!(
+            messages.mappings[0].msg_id,
+            "kfwvyN59sihMeSFjBP44ujI_as4ZEQWERrS83ordEkY"
+        );
+        assert!(!messages.has_next_page);
     }
 
     #[test]
     fn scan_protocol_b_genesis_test() {
-       let messages = scan_arweave_block_for_msgs(DataProtocol::B, DATA_PROTOCOL_B_START, None).unwrap();
-       println!("{:?}", messages);
-       assert_eq!(messages.mappings[0].msg_id, "FY3NP7-edCq3RIE0aiSxbme2n428XdiTvp3gJKbMISQ");
-       assert!(!messages.has_next_page);
+        let messages =
+            scan_arweave_block_for_msgs(DataProtocol::B, DATA_PROTOCOL_B_START, None).unwrap();
+        println!("{:?}", messages);
+        assert_eq!(
+            messages.mappings[0].msg_id,
+            "FY3NP7-edCq3RIE0aiSxbme2n428XdiTvp3gJKbMISQ"
+        );
+        assert!(!messages.has_next_page);
     }
 
     #[test]
     // simulates an messages-empty block
     fn scan_protocol_a_pre_genesis_test() {
-       let err = scan_arweave_block_for_msgs(DataProtocol::A, DATA_PROTOCOL_A_START - 1, None);
-       assert!(err.is_err());
+        let err = scan_arweave_block_for_msgs(DataProtocol::A, DATA_PROTOCOL_A_START - 1, None);
+        assert!(err.is_err());
     }
 }
