@@ -330,10 +330,17 @@ impl AtlasIndexerClient {
     pub async fn mainnet_messages_by_tag(
         &self,
         protocol: Option<&str>,
-        tag_key: &str,
+        tag_keys: &[String],
         tag_value: &str,
         limit: u64,
     ) -> Result<Vec<MainnetMessage>, Error> {
+        if tag_keys.is_empty() {
+            return Ok(Vec::new());
+        }
+        let placeholders = std::iter::repeat("?")
+            .take(tag_keys.len())
+            .collect::<Vec<_>>()
+            .join(", ");
         let protocol_clause = if protocol.is_some() {
             " and m.protocol = ?"
         } else {
@@ -349,17 +356,17 @@ impl AtlasIndexerClient {
                on filter.protocol = m.protocol and filter.block_height = m.block_height and filter.msg_id = m.msg_id \
              left join ao_mainnet_message_tags t \
                on t.protocol = m.protocol and t.block_height = m.block_height and t.msg_id = m.msg_id \
-             where filter.tag_key = ? and filter.tag_value = ?{} \
+             where filter.tag_key in ({}) and filter.tag_value = ?{} \
              group by m.protocol, m.block_height, m.block_timestamp, m.msg_id, m.owner, m.recipient, m.bundled_in, m.data_size, m.ts \
              order by m.block_height desc, m.msg_id desc \
              limit ?",
-            protocol_clause
+            placeholders, protocol_clause
         );
-        let mut query = self
-            .client
-            .query(&sql)
-            .bind(tag_key)
-            .bind(tag_value);
+        let mut query = self.client.query(&sql);
+        for key in tag_keys {
+            query = query.bind(key);
+        }
+        query = query.bind(tag_value);
         if let Some(p) = protocol {
             query = query.bind(p);
         }

@@ -234,8 +234,12 @@ pub async fn get_mainnet_messages_by_tag(
         .filter(|v| !v.is_empty())
         .ok_or_else(|| ServerError::from(anyhow!("missing tag value")))?;
     let client = AtlasIndexerClient::new().await?;
+    let tag_keys = build_tag_key_variants(protocol.as_deref(), &key);
+    if tag_keys.is_empty() {
+        return Err(ServerError::from(anyhow!("invalid tag key")));
+    }
     let rows = client
-        .mainnet_messages_by_tag(protocol.as_deref(), &key, &value, limit)
+        .mainnet_messages_by_tag(protocol.as_deref(), &tag_keys, &value, limit)
         .await?;
     Ok(Json(serde_json::to_value(&rows)?))
 }
@@ -258,4 +262,41 @@ fn parse_protocol(value: Option<&String>) -> Result<Option<String>, ServerError>
         return Ok(Some(normalized));
     }
     Ok(None)
+}
+
+fn build_tag_key_variants(protocol: Option<&str>, key: &str) -> Vec<String> {
+    let trimmed = key.trim();
+    if trimmed.is_empty() {
+        return Vec::new();
+    }
+    let lower = trimmed.to_ascii_lowercase();
+    let header = to_header_case(trimmed);
+    match protocol {
+        Some("A") => vec![lower],
+        Some("B") => vec![header],
+        _ => {
+            if lower == header {
+                vec![lower]
+            } else {
+                vec![lower, header]
+            }
+        }
+    }
+}
+
+fn to_header_case(input: &str) -> String {
+    let mut result = String::with_capacity(input.len());
+    for (i, segment) in input.split('-').enumerate() {
+        if i > 0 {
+            result.push('-');
+        }
+        let mut chars = segment.chars();
+        if let Some(first) = chars.next() {
+            result.push(first.to_ascii_uppercase());
+        }
+        for c in chars {
+            result.push(c.to_ascii_lowercase());
+        }
+    }
+    result
 }
