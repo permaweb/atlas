@@ -24,12 +24,25 @@ Base endpoint: https://atlas-server.decent.land
 - `GET /explorer/blocks?limit=100` - emits the last N indexed blocks.
 - `GET /explorer/day?day=YYYY-MM-DD` - per-block unique counts + summed-over-block totals for the given date (defaults to `today`).
 - `GET /explorer/days?limit=N` - same payload as `/explorer/day`, aggregated for the last N days (defaults to 7). 
+
+> explorer N.B: Fields ending in `_over_blocks` are summed across blocks (no dedup over all-day blocks); other counters are unique per block and safe to sum.
+
 - `GET /mainnet/messages/recent` - returns recently indexed ao mainnet messages.
 - `GET /mainnet/messages/block/{height}` - returns the indexed ao messages at a given Arweave blockheight (settled messages)
 - `GET /mainnet/messages/tags?key=<TAG_NAME>&value=<TAG_VALUE>&protocol=<A|B>&limit=<N>` - (case sensitive) returns the ao messages for the given tag KV filter, and data protocol (A|B).
 - `GET /mainnet/info` - returns ao mainnet indexer info
 
-Fields ending in `_over_blocks` are summed across blocks (no dedup over all-day blocks); other counters are unique per block and safe to sum.
+> ***mainnet N.B*** 
+the mainnet (ao.N.1) have 2 type of tags for messages, in Atlas,
+we label them as type A and type B:
+>
+> tag format: 
+>- type A follows lower-case tags key format
+>- type B follows Header-Case tags key format
+>
+> indexing start height/date:
+>- type A start blockheight: 1_594_020 -- Jan 22 2025
+>- type B start blockheight: 1_616_999 --  Feb 25 2025
 
 ## Using the workspace crates in Rust
 
