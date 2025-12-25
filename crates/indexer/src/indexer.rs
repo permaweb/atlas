@@ -396,13 +396,8 @@ async fn run_mainnet_worker(
                 .insert_mainnet_block_state(&[clamp_row])
                 .await?;
         }
-        if state.last_cursor.is_empty() {
-            height = state
-                .last_complete_height
-                .saturating_add(1)
-                .max(start);
-        } else {
-            height = state.last_complete_height.max(start);
+        height = state.last_complete_height.max(start);
+        if !state.last_cursor.is_empty() {
             cursor = Some(state.last_cursor);
         }
     }
