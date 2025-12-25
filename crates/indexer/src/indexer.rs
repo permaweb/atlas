@@ -367,7 +367,26 @@ async fn run_mainnet_worker(
     let protocol_name = protocol_label(protocol).to_string();
     let mut height = start;
     let mut cursor = None;
-    if let Some(mut state) = clickhouse
+    if matches!(protocol, DataProtocol::B) {
+        if let Some(b_height) = clickhouse
+            .max_mainnet_height(&protocol_name)
+            .await?
+        {
+            println!(
+                "mainnet protocol {} overriding stored height to {} before startup",
+                protocol_name, b_height
+            );
+            clickhouse
+                .insert_mainnet_block_state(&[MainnetBlockStateRow {
+                    updated_at: Utc::now(),
+                    protocol: protocol_name.clone(),
+                    last_complete_height: b_height,
+                    last_cursor: String::new(),
+                }])
+                .await?;
+        }
+    }
+    if let Some(state) = clickhouse
         .fetch_mainnet_block_state(&protocol_name)
         .await?
     {
