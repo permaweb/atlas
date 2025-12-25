@@ -375,6 +375,22 @@ async fn run_mainnet_worker(
             .max_mainnet_height(&protocol_name)
             .await?
             .unwrap_or_else(|| start.saturating_sub(1));
+        if matches!(protocol, DataProtocol::B) && state.last_complete_height > indexed_height {
+            println!(
+                "mainnet protocol {} forcing state height {} reset to indexed block {}",
+                protocol_name, state.last_complete_height, indexed_height
+            );
+            state.last_complete_height = indexed_height;
+            state.last_cursor.clear();
+            clickhouse
+                .insert_mainnet_block_state(&[MainnetBlockStateRow {
+                    updated_at: Utc::now(),
+                    protocol: protocol_name.clone(),
+                    last_complete_height: indexed_height,
+                    last_cursor: String::new(),
+                }])
+                .await?;
+        }
         if state.last_complete_height > indexed_height {
             println!(
                 "mainnet protocol {} stored height {} exceeds indexed {}, clamping",
