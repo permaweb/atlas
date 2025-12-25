@@ -93,6 +93,20 @@ impl Clickhouse {
         self.insert_rows("ao_mainnet_block_state", rows).await
     }
 
+    pub async fn force_mainnet_block_state(&self, protocol: &str, height: u32) -> Result<()> {
+        self.client
+            .query(
+                "insert into ao_mainnet_block_state \
+                 (protocol, last_complete_height, last_cursor, updated_at) \
+                 values (?, ?, '', now())",
+            )
+            .bind(protocol)
+            .bind(height)
+            .execute()
+            .await?;
+        Ok(())
+    }
+
     pub async fn truncate_mainnet_explorer(&self) -> Result<()> {
         self.client
             .query("truncate table if exists ao_mainnet_explorer")
