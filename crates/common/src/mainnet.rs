@@ -233,6 +233,18 @@ query aoMainnet {
     })
 }
 
+#[derive(Deserialize)]
+struct NetworkInfo {
+    height: u64,
+}
+
+pub fn get_network_height() -> Result<u64, Error> {
+    let mut res = ureq::get("https://arweave.net/info").call()?;
+    let body = res.body_mut().read_to_string()?;
+    let info: NetworkInfo = serde_json::from_str(&body)?;
+    Ok(info.height)
+}
+
 #[cfg(test)]
 mod tests {
     use crate::{

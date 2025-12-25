@@ -7,7 +7,7 @@ use common::{
     gql::OracleStakers,
     mainnet::{
         DataProtocol, MainnetBlockMessagesMeta, MainnetBlockMessagesPage,
-        scan_arweave_block_for_msgs,
+        get_network_height, scan_arweave_block_for_msgs,
     },
     projects::Project,
 };
@@ -385,7 +385,25 @@ async fn run_mainnet_worker(
         "mainnet protocol {} starting at height {}",
         protocol_name, height
     );
+    let mut network_tip = fetch_network_height().await.unwrap_or(height as u64);
     loop {
+        if height as u64 > network_tip {
+            match fetch_network_height().await {
+                Ok(latest) => network_tip = latest,
+                Err(err) => {
+                    eprintln!(
+                        "mainnet tip fetch error protocol={} err={err:?}",
+                        protocol_name
+                    );
+                    sleep(Duration::from_secs(5)).await;
+                    continue;
+                }
+            }
+            if height as u64 > network_tip {
+                sleep(Duration::from_secs(5)).await;
+                continue;
+            }
+        }
         let page = match fetch_mainnet_page(protocol, height, cursor.clone()).await {
             Ok(page) => page,
             Err(err) => {
@@ -494,6 +512,11 @@ async fn fetch_mainnet_page(
         scan_arweave_block_for_msgs(protocol, height, cursor.as_deref())
     })
     .await??)
+}
+
+async fn fetch_network_height() -> Result<u64> {
+    let height = tokio::task::spawn_blocking(|| get_network_height()).await??;
+    Ok(height)
 }
 
 fn protocol_label(protocol: DataProtocol) -> &'static str {
