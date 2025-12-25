@@ -371,43 +371,6 @@ async fn run_mainnet_worker(
         .fetch_mainnet_block_state(&protocol_name)
         .await?
     {
-        let indexed_height = clickhouse
-            .max_mainnet_height(&protocol_name)
-            .await?
-            .unwrap_or_else(|| start.saturating_sub(1));
-        if matches!(protocol, DataProtocol::B) && state.last_complete_height > indexed_height {
-            println!(
-                "mainnet protocol {} forcing state height {} reset to indexed block {}",
-                protocol_name, state.last_complete_height, indexed_height
-            );
-            state.last_complete_height = indexed_height;
-            state.last_cursor.clear();
-            clickhouse
-                .insert_mainnet_block_state(&[MainnetBlockStateRow {
-                    updated_at: Utc::now(),
-                    protocol: protocol_name.clone(),
-                    last_complete_height: indexed_height,
-                    last_cursor: String::new(),
-                }])
-                .await?;
-        }
-        if state.last_complete_height > indexed_height {
-            println!(
-                "mainnet protocol {} stored height {} exceeds indexed {}, clamping",
-                protocol_name, state.last_complete_height, indexed_height
-            );
-            state.last_complete_height = indexed_height;
-            state.last_cursor.clear();
-            let clamp_row = MainnetBlockStateRow {
-                updated_at: Utc::now(),
-                protocol: protocol_name.clone(),
-                last_complete_height: indexed_height,
-                last_cursor: String::new(),
-            };
-            clickhouse
-                .insert_mainnet_block_state(&[clamp_row])
-                .await?;
-        }
         height = state.last_complete_height.max(start);
         if !state.last_cursor.is_empty() {
             cursor = Some(state.last_cursor);
@@ -421,7 +384,7 @@ async fn run_mainnet_worker(
     );
     let mut network_tip = fetch_network_height().await.unwrap_or(height as u64);
     loop {
-        if height as u64 > network_tip {
+        while height as u64 > network_tip {
             match fetch_network_height().await {
                 Ok(latest) => network_tip = latest,
                 Err(err) => {
@@ -429,13 +392,14 @@ async fn run_mainnet_worker(
                         "mainnet tip fetch error protocol={} err={err:?}",
                         protocol_name
                     );
-                    sleep(Duration::from_secs(5)).await;
-                    continue;
                 }
             }
             if height as u64 > network_tip {
-                sleep(Duration::from_secs(5)).await;
-                continue;
+                println!(
+                    "mainnet protocol {} waiting, height {} exceeds tip {}",
+                    protocol_name, height, network_tip
+                );
+                sleep(Duration::from_secs(60)).await;
             }
         }
         let page = match fetch_mainnet_page(protocol, height, cursor.clone()).await {
