@@ -48,10 +48,6 @@ impl Indexer {
 
     pub async fn run(&self) -> Result<()> {
         self.clickhouse.ensure().await?;
-        println!("forcing protocol B state to 1822614");
-        self.clickhouse
-            .force_mainnet_block_state("B", 1_822_614)
-            .await?;
         self.spawn_explorer_bridge().await?;
         self.spawn_mainnet_indexer().await?;
         self.rebuild_mainnet_explorer().await?;
@@ -371,36 +367,15 @@ async fn run_mainnet_worker(
     let protocol_name = protocol_label(protocol).to_string();
     let mut height = start;
     let mut cursor = None;
-    let mut skip_state = false;
-    if matches!(protocol, DataProtocol::B) {
-        if let Some(b_height) = clickhouse
-            .max_mainnet_height(&protocol_name)
-            .await?
-        {
-            let next_height = b_height.max(start).saturating_add(1);
-            println!(
-                "mainnet protocol {} overriding stored height to indexed {} (next {})",
-                protocol_name, b_height, next_height
-            );
-            height = next_height;
-            cursor = None;
-            skip_state = true;
-            clickhouse
-                .force_mainnet_block_state(&protocol_name, b_height)
-                .await?;
-        }
-    }
-    if !skip_state {
-        if let Some(state) = clickhouse
-            .fetch_mainnet_block_state(&protocol_name)
-            .await?
-        {
-            height = state.last_complete_height.max(start);
-            if !state.last_cursor.is_empty() {
-                cursor = Some(state.last_cursor);
-            } else {
-                height = height.saturating_add(1);
-            }
+    if let Some(state) = clickhouse
+        .fetch_mainnet_block_state(&protocol_name)
+        .await?
+    {
+        height = state.last_complete_height.max(start);
+        if !state.last_cursor.is_empty() {
+            cursor = Some(state.last_cursor);
+        } else {
+            height = height.saturating_add(1);
         }
     }
     println!(

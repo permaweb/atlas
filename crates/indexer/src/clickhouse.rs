@@ -93,20 +93,6 @@ impl Clickhouse {
         self.insert_rows("ao_mainnet_block_state", rows).await
     }
 
-    pub async fn force_mainnet_block_state(&self, protocol: &str, height: u32) -> Result<()> {
-        self.client
-            .query(
-                "insert into ao_mainnet_block_state \
-                 (protocol, last_complete_height, last_cursor, updated_at) \
-                 values (?, ?, '', now())",
-            )
-            .bind(protocol)
-            .bind(height)
-            .execute()
-            .await?;
-        Ok(())
-    }
-
     pub async fn truncate_mainnet_explorer(&self) -> Result<()> {
         self.client
             .query("truncate table if exists ao_mainnet_explorer")
@@ -154,23 +140,6 @@ impl Clickhouse {
             .fetch_all::<MainnetBlockMetricRow>()
             .await?;
         Ok(rows)
-    }
-
-    pub async fn max_mainnet_height(&self, protocol: &str) -> Result<Option<u32>> {
-        let row = self
-            .client
-            .query(
-                "select max(block_height) as height \
-                 from ao_mainnet_messages \
-                 where protocol = ?",
-            )
-            .bind(protocol)
-            .fetch_all::<MainnetMaxHeightRow>()
-            .await?;
-        Ok(row
-            .into_iter()
-            .next()
-            .and_then(|r| r.height))
     }
 
     pub async fn fetch_mainnet_block_state(
@@ -441,9 +410,4 @@ impl From<ExplorerSelectRow> for BlockStats {
 #[derive(Debug, Row, Serialize, serde::Deserialize)]
 struct CountRow {
     pub cnt: u64,
-}
-
-#[derive(Debug, Row, Serialize, serde::Deserialize)]
-struct MainnetMaxHeightRow {
-    pub height: Option<u32>,
 }
