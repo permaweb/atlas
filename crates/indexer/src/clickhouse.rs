@@ -108,6 +108,22 @@ impl Clickhouse {
         self.insert_rows("ao_mainnet_explorer", rows).await
     }
 
+    pub async fn latest_mainnet_explorer_row(&self) -> Result<Option<MainnetExplorerRow>> {
+        let rows = self
+            .client
+            .query(
+                "select ts, height, tx_count, eval_count, transfer_count, \
+                 new_process_count, new_module_count, active_users, active_processes, \
+                 tx_count_rolling, processes_rolling, modules_rolling \
+                 from ao_mainnet_explorer \
+                 order by height desc \
+                 limit 1",
+            )
+            .fetch_all::<MainnetExplorerRow>()
+            .await?;
+        Ok(rows.into_iter().next())
+    }
+
     pub async fn fetch_mainnet_block_metrics(
         &self,
         after_height: u32,
@@ -319,7 +335,7 @@ pub struct MainnetBlockStateRow {
     pub last_cursor: String,
 }
 
-#[derive(Clone, Debug, Row, Serialize)]
+#[derive(Clone, Debug, Row, Serialize, Deserialize)]
 pub struct MainnetExplorerRow {
     #[serde(with = "clickhouse::serde::chrono::datetime64::millis")]
     pub ts: DateTime<Utc>,

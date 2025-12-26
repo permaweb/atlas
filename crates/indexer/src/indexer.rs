@@ -51,6 +51,7 @@ impl Indexer {
         self.spawn_explorer_bridge().await?;
         self.spawn_mainnet_indexer().await?;
         self.rebuild_mainnet_explorer().await?;
+        self.spawn_mainnet_explorer_tail().await?;
         // self.spawn_backfill();
         println!("indexer ready with tickers {:?}", self.config.tickers);
         self.run_once().await?;
@@ -157,6 +158,16 @@ impl Indexer {
             println!("mainnet explorer indexed up to height {}", last_height);
         }
         println!("ao mainnet explorer rebuild complete");
+        Ok(())
+    }
+
+    async fn spawn_mainnet_explorer_tail(&self) -> Result<()> {
+        let clickhouse = self.clickhouse.clone();
+        tokio::spawn(async move {
+            if let Err(err) = run_mainnet_explorer_tail(clickhouse).await {
+                eprintln!("mainnet explorer tail error: {err:?}");
+            }
+        });
         Ok(())
     }
 
@@ -531,4 +542,43 @@ fn is_empty_block_error(err: &anyhow::Error) -> bool {
 
 fn is_rate_limit_error(err: &anyhow::Error) -> bool {
     err.to_string().contains("http status: 429")
+}
+
+async fn run_mainnet_explorer_tail(clickhouse: Clickhouse) -> Result<()> {
+    let last_row = clickhouse.latest_mainnet_explorer_row().await?;
+    let mut last_height = last_row.as_ref().map(|r| r.height as u32).unwrap_or(0);
+    let mut tx_roll = last_row.as_ref().map(|r| r.tx_count_rolling).unwrap_or(0);
+    let mut proc_roll = last_row.as_ref().map(|r| r.processes_rolling).unwrap_or(0);
+    let mut mod_roll = last_row.as_ref().map(|r| r.modules_rolling).unwrap_or(0);
+    loop {
+        let metrics = clickhouse
+            .fetch_mainnet_block_metrics(last_height, 512)
+            .await?;
+        if metrics.is_empty() {
+            sleep(Duration::from_secs(120)).await;
+            continue;
+        }
+        let mut rows = Vec::with_capacity(metrics.len());
+        for metric in metrics {
+            last_height = metric.height;
+            tx_roll += metric.tx_count;
+            proc_roll += metric.new_process_count;
+            mod_roll += metric.new_module_count;
+            rows.push(MainnetExplorerRow {
+                ts: metric.ts,
+                height: metric.height as u64,
+                tx_count: metric.tx_count,
+                eval_count: metric.eval_count,
+                transfer_count: metric.transfer_count,
+                new_process_count: metric.new_process_count,
+                new_module_count: metric.new_module_count,
+                active_users: metric.active_users,
+                active_processes: metric.active_processes,
+                tx_count_rolling: tx_roll,
+                processes_rolling: proc_roll,
+                modules_rolling: mod_roll,
+            });
+        }
+        clickhouse.insert_mainnet_explorer_rows(&rows).await?;
+    }
 }
