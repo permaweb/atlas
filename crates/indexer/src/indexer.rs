@@ -36,6 +36,8 @@ use crate::{
 };
 use explorer;
 
+const ARWEAVE_TIP_SAFE_GAP: u64 = 2;
+
 pub struct Indexer {
     config: Config,
     clickhouse: Clickhouse,
@@ -395,7 +397,7 @@ async fn run_mainnet_worker(
     );
     let mut network_tip = fetch_network_height().await.unwrap_or(height as u64);
     loop {
-        while height as u64 > network_tip {
+        while height as u64 + ARWEAVE_TIP_SAFE_GAP > network_tip {
             match fetch_network_height().await {
                 Ok(latest) => network_tip = latest,
                 Err(err) => {
@@ -405,9 +407,9 @@ async fn run_mainnet_worker(
                     );
                 }
             }
-            if height as u64 > network_tip {
+            if height as u64 + ARWEAVE_TIP_SAFE_GAP > network_tip {
                 println!(
-                    "mainnet protocol {} waiting, height {} exceeds tip {}",
+                    "mainnet protocol {} waiting, height {} exceeds tip {} with gap 2",
                     protocol_name, height, network_tip
                 );
                 sleep(Duration::from_secs(60)).await;
