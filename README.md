@@ -51,6 +51,19 @@ we label them as type A and type B:
 >- type A start blockheight: 1_594_020 -- Jan 22 2025
 >- type B start blockheight: 1_616_999 --  Feb 25 2025
 
+AO token messages (ao.TN.1):
+- `GET /token/ao/txs` - list AO token messages (indexed).
+- `GET /token/ao/txs/{msg_id}` - message by id (includes tags).
+- `GET /token/ao/txs/tags?key=<TAG_NAME>&value=<TAG_VALUE>&source=<transfer|process>&limit=<N>` - filter AO token messages by tag.
+
+> ***AO token N.B***
+> amount filters use human units (12 decimals) and are applied against the `Quantity` tag.
+
+Example AO token filters:
+- `GET /token/ao/txs?source=transfer&action=Transfer&min_amount=1.5&max_amount=10`
+- `GET /token/ao/txs?action=Debit-Notice&from_ts=1739059000&to_ts=1739062000`
+- `GET /token/ao/txs?block_min=1606020&block_max=1606040&recipient=<AO_ADDRESS>`
+
 ## Using the workspace crates in Rust
 
 
