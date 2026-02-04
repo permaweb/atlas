@@ -626,6 +626,7 @@ impl AtlasIndexerClient {
         block_max: Option<u32>,
         recipient: Option<&str>,
         sender: Option<&str>,
+        order: Option<&str>,
         limit: u64,
         offset: u64,
     ) -> Result<Vec<AoTokenMessage>, Error> {
@@ -710,6 +711,10 @@ impl AtlasIndexerClient {
         } else {
             format!("\nwhere {}", where_clauses.join(" and "))
         };
+        let order_dir = match order {
+            Some("asc") => "asc",
+            _ => "desc",
+        };
         let sql = format!(
             "select \
                 m.source, m.block_height, m.block_timestamp, m.msg_id, m.owner, m.recipient, \
@@ -721,9 +726,9 @@ impl AtlasIndexerClient {
              {} \
              {} \
              group by m.source, m.block_height, m.block_timestamp, m.msg_id, m.owner, m.recipient, m.bundled_in, m.data_size, m.ts \
-             order by m.block_height desc, m.msg_id desc \
+             order by m.block_height {}, m.msg_id {} \
              limit ? offset ?",
-            join_clause, where_clause
+            join_clause, where_clause, order_dir, order_dir
         );
         let mut query = self.client.query(&sql);
         for bind in binds {
