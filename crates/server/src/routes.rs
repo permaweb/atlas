@@ -318,6 +318,10 @@ pub async fn get_ao_token_txs(
         .get("sender")
         .map(|v| v.trim().to_string())
         .filter(|v| !v.is_empty());
+    let order = params
+        .get("order")
+        .map(|v| v.trim().to_ascii_lowercase())
+        .filter(|v| v == "asc" || v == "desc");
     let min_qty = parse_amount_param(params.get("min_amount"))?;
     let max_qty = parse_amount_param(params.get("max_amount"))?;
     let from_ts = parse_u64_param(params.get("from_ts"))?;
@@ -337,6 +341,7 @@ pub async fn get_ao_token_txs(
             block_max,
             recipient.as_deref(),
             sender.as_deref(),
+            order.as_deref(),
             limit,
             offset,
         )

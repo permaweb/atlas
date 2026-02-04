@@ -52,7 +52,8 @@ we label them as type A and type B:
 >- type B start blockheight: 1_616_999 --  Feb 25 2025
 
 AO token messages (ao.TN.1):
-- `GET /token/ao/txs` - list AO token messages (indexed).
+- `GET /token/ao/info` - returns the $AO token indexer info
+- `GET /token/ao/txs?order=asc|desc` - list AO token messages (indexed) - ordering by blockheight.
 - `GET /token/ao/txs/{msg_id}` - message by id (includes tags).
 - `GET /token/ao/txs/tags?key=<TAG_NAME>&value=<TAG_VALUE>&source=<transfer|process>&limit=<N>` - filter AO token messages by tag.
 
