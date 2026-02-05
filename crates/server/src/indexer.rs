@@ -774,7 +774,7 @@ impl AtlasIndexerClient {
                 "inner join ao_token_message_tags action_filter \
                  on action_filter.source = m.source and action_filter.block_height = m.block_height \
                  and action_filter.msg_id = m.msg_id and action_filter.tag_key = 'Action' \
-                 and action_filter.tag_value = ?"
+                 and lowerUTF8(action_filter.tag_value) = lowerUTF8(?)"
                     .to_string(),
             );
             binds.push(BindValue::Str(val.to_string()));
