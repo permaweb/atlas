@@ -76,7 +76,7 @@ tags: [
 }
 "#;
     let cursor_clause = cursor
-        .map(|c| format!("    after: \"{}\",\n", c))
+        .map(|c| format!("    after: \"{c}\",\n"))
         .unwrap_or_default();
     let query = template
         .replace("$blockid", &height.to_string())

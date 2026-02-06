@@ -204,9 +204,9 @@ impl Clickhouse {
     }
 
     pub async fn has_oracle(&self, ticker: &str, tx_id: &str) -> Result<bool> {
-        let query = format!(
+        let query =
             "select count() as cnt from oracle_snapshots where ticker = ? and tx_id = ? limit 1"
-        );
+                .to_string();
         let row = self
             .client
             .query(&query)
