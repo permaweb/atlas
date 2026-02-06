@@ -1,21 +1,17 @@
-use anyhow::Result;
-use chrono::Utc;
-use common::delegation::{
-    DELEGATION_PID_START_HEIGHT, DelegationMappingMeta, DelegationMappingsPage,
-    get_delegation_mappings,
-};
-use tokio::time::{Duration, sleep};
+// use anyhow::Result;
+// use chrono::Utc;
+// use tokio::time::{Duration, sleep};
 
-use crate::clickhouse::{Clickhouse, DelegationMappingRow};
+// use crate::clickhouse::{Clickhouse, DelegationMappingRow};
 
-use common::mainnet::{DataProtocol, MainnetBlockMessagesMeta};
+// use common::mainnet::{DataProtocol, MainnetBlockMessagesMeta};
 
-use crate::clickhouse::{MainnetMessageRow, MainnetMessageTagRow};
-use crate::indexer::{
-    fetch_mainnet_page, fetch_network_height, is_empty_block_error, protocol_label,
-};
+// use crate::clickhouse::{MainnetMessageRow, MainnetMessageTagRow};
+// use crate::indexer::{
+//     fetch_mainnet_page, fetch_network_height, is_empty_block_error, protocol_label,
+// };
 
-const ARWEAVE_TIP_SAFE_GAP: u64 = 3;
+// const ARWEAVE_TIP_SAFE_GAP: u64 = 3;
 
 // const TARGET_HEIGHT: u32 = 1_807_500; // thats where the forward indexer starts
 // const PAGE_SIZE: u32 = 100;
@@ -110,83 +106,82 @@ const ARWEAVE_TIP_SAFE_GAP: u64 = 3;
 
 // ao.N.1 blocks gap filler
 
-pub async fn run_mainnet_gap_worker(
-    clickhouse: Clickhouse,
-    protocol: DataProtocol,
-    start: u32,
-) -> Result<()> {
-    let protocol_name = protocol_label(protocol).to_string();
-    let mut height = start;
-    let mut cursor = None;
-    loop {
-        let tip = fetch_network_height().await.unwrap_or(height as u64);
-        if height as u64 + ARWEAVE_TIP_SAFE_GAP > tip {
-            break;
-        }
-        let page = match fetch_mainnet_page(protocol, height, cursor.clone()).await {
-            Ok(page) => page,
-            Err(err) => {
-                if is_empty_block_error(&err) {
-                    cursor = None;
-                    println!("gap protocol {} height {} empty", protocol_name, height);
-                    height = height.saturating_add(1);
-                } else {
-                    eprintln!(
-                        "gap fetch error protocol={} height={} err={err:?}",
-                        protocol_name, height
-                    );
-                    sleep(Duration::from_secs(1)).await;
-                }
-                continue;
-            }
-        };
-        let ts = Utc::now();
-        let mut message_rows = Vec::with_capacity(page.mappings.len());
-        let mut tag_rows = Vec::new();
-        for meta in page.mappings {
-            let MainnetBlockMessagesMeta {
-                msg_id,
-                owner,
-                recipient,
-                block_height,
-                block_timestamp,
-                bundled_in,
-                data_size,
-                tags,
-            } = meta;
-            let msg_id_for_tags = msg_id.clone();
-            message_rows.push(MainnetMessageRow {
-                ts,
-                protocol: protocol_name.clone(),
-                block_height,
-                block_timestamp,
-                msg_id,
-                owner,
-                recipient,
-                bundled_in,
-                data_size,
-            });
-            for tag in tags {
-                tag_rows.push(MainnetMessageTagRow {
-                    ts,
-                    protocol: protocol_name.clone(),
-                    block_height,
-                    msg_id: msg_id_for_tags.clone(),
-                    tag_key: tag.key,
-                    tag_value: tag.value,
-                });
-            }
-        }
-        clickhouse.insert_mainnet_messages(&message_rows).await?;
-        clickhouse.insert_mainnet_message_tags(&tag_rows).await?;
-        cursor = if page.has_next_page {
-            page.end_cursor.clone()
-        } else {
-            None
-        };
-        if cursor.is_none() {
-            height = height.saturating_add(1);
-        }
-    }
-    Ok(())
-}
+// pub async fn run_mainnet_gap_worker(
+//     clickhouse: Clickhouse,
+//     protocol: DataProtocol,
+//     start: u32,
+// ) -> Result<()> {
+//     let protocol_name = protocol_label(protocol).to_string();
+//     let mut height = start;
+//     let mut cursor = None;
+//     loop {
+//         let tip = fetch_network_height().await.unwrap_or(height as u64);
+//         if height as u64 + ARWEAVE_TIP_SAFE_GAP > tip {
+//             break;
+//         }
+//         let page = match fetch_mainnet_page(protocol, height, cursor.clone()).await {
+//             Ok(page) => page,
+//             Err(err) => {
+//                 if is_empty_block_error(&err) {
+//                     cursor = None;
+//                     println!("gap protocol {protocol_name} height {height} empty");
+//                     height = height.saturating_add(1);
+//                 } else {
+//                     eprintln!(
+//                         "gap fetch error protocol={protocol_name} height={height} err={err:?}"
+//                     );
+//                     sleep(Duration::from_secs(1)).await;
+//                 }
+//                 continue;
+//             }
+//         };
+//         let ts = Utc::now();
+//         let mut message_rows = Vec::with_capacity(page.mappings.len());
+//         let mut tag_rows = Vec::new();
+//         for meta in page.mappings {
+//             let MainnetBlockMessagesMeta {
+//                 msg_id,
+//                 owner,
+//                 recipient,
+//                 block_height,
+//                 block_timestamp,
+//                 bundled_in,
+//                 data_size,
+//                 tags,
+//             } = meta;
+//             let msg_id_for_tags = msg_id.clone();
+//             message_rows.push(MainnetMessageRow {
+//                 ts,
+//                 protocol: protocol_name.clone(),
+//                 block_height,
+//                 block_timestamp,
+//                 msg_id,
+//                 owner,
+//                 recipient,
+//                 bundled_in,
+//                 data_size,
+//             });
+//             for tag in tags {
+//                 tag_rows.push(MainnetMessageTagRow {
+//                     ts,
+//                     protocol: protocol_name.clone(),
+//                     block_height,
+//                     msg_id: msg_id_for_tags.clone(),
+//                     tag_key: tag.key,
+//                     tag_value: tag.value,
+//                 });
+//             }
+//         }
+//         clickhouse.insert_mainnet_messages(&message_rows).await?;
+//         clickhouse.insert_mainnet_message_tags(&tag_rows).await?;
+//         cursor = if page.has_next_page {
+//             page.end_cursor.clone()
+//         } else {
+//             None
+//         };
+//         if cursor.is_none() {
+//             height = height.saturating_add(1);
+//         }
+//     }
+//     Ok(())
+// }

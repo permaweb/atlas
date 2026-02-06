@@ -167,7 +167,7 @@ query aoMainnet {
             .get("block")
             .and_then(|v| v.get("timestamp"))
             .and_then(|v| v.as_u64())
-            .map(|v| v as u64)
+            .map(|v| v)
             .unwrap_or(0);
         let tags = node
             .get("tags")

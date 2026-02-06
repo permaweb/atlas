@@ -261,11 +261,10 @@ impl AtlasIndexerClient {
              sumIf(toFloat64(p.amount), p.ticker = 'steth') as steth_total \
              from flp_positions p \
              inner join oracle_snapshots o on o.ticker = p.ticker and o.ts = p.ts \
-             where p.project = ?{} \
+             where p.project = ?{ticker_clause} \
              group by o.tx_id, p.ts \
              order by p.ts desc \
              limit ?",
-            ticker_clause
         );
         let mut query = self.client.query(&query_str);
         query = query.bind(project);
@@ -297,11 +296,10 @@ impl AtlasIndexerClient {
              from ao_mainnet_messages m \
              left join ao_mainnet_message_tags t \
                on t.protocol = m.protocol and t.block_height = m.block_height and t.msg_id = m.msg_id \
-             {} \
+             {where_clause} \
              group by m.protocol, m.block_height, m.block_timestamp, m.msg_id, m.owner, m.recipient, m.bundled_in, m.data_size, m.ts \
              order by m.block_height desc, m.msg_id desc \
-             limit ?",
-            where_clause
+             limit ?"
         );
         let mut query = self.client.query(&sql);
         if let Some(p) = protocol {
@@ -330,11 +328,10 @@ impl AtlasIndexerClient {
              from ao_mainnet_messages m \
              left join ao_mainnet_message_tags t \
                on t.protocol = m.protocol and t.block_height = m.block_height and t.msg_id = m.msg_id \
-             {} \
+             {where_clause} \
              group by m.protocol, m.block_height, m.block_timestamp, m.msg_id, m.owner, m.recipient, m.bundled_in, m.data_size, m.ts \
              order by m.msg_id \
-             limit ?",
-            where_clause
+             limit ?"
         );
         let mut query = self.client.query(&sql).bind(height);
         if let Some(p) = protocol {
@@ -373,11 +370,10 @@ impl AtlasIndexerClient {
                on filter.protocol = m.protocol and filter.block_height = m.block_height and filter.msg_id = m.msg_id \
              left join ao_mainnet_message_tags t \
                on t.protocol = m.protocol and t.block_height = m.block_height and t.msg_id = m.msg_id \
-             where filter.tag_key in ({}) and filter.tag_value = ?{} \
+             where filter.tag_key in ({placeholders}) and filter.tag_value = ?{protocol_clause} \
              group by m.protocol, m.block_height, m.block_timestamp, m.msg_id, m.owner, m.recipient, m.bundled_in, m.data_size, m.ts \
              order by m.block_height desc, m.msg_id desc \
-             limit ?",
-            placeholders, protocol_clause
+             limit ?"
         );
         let mut query = self.client.query(&sql);
         for key in tag_keys {
@@ -617,28 +613,25 @@ impl AtlasIndexerClient {
         let action_sql = format!(
             "select tag_value, count() as cnt \
              from ao_token_message_tags \
-             where tag_key = 'Action'{} \
+             where tag_key = 'Action'{source_clause} \
              group by tag_value \
-             order by cnt desc",
-            source_clause
+             order by cnt desc"
         );
         let sender_sql = format!(
             "select tag_value, count() as cnt \
              from ao_token_message_tags \
-             where tag_key = 'Sender'{} \
+             where tag_key = 'Sender'{source_clause} \
              group by tag_value \
              order by cnt desc \
-             limit ?",
-            source_clause
+             limit ?"
         );
         let recipient_sql = format!(
             "select tag_value, count() as cnt \
              from ao_token_message_tags \
-             where tag_key = 'Recipient'{} \
+             where tag_key = 'Recipient'{source_clause} \
              group by tag_value \
              order by cnt desc \
-             limit ?",
-            source_clause
+             limit ?"
         );
 
         let action_rows = self
@@ -858,12 +851,11 @@ impl AtlasIndexerClient {
              from ao_token_messages m \
              left join ao_token_message_tags t \
                on t.source = m.source and t.block_height = m.block_height and t.msg_id = m.msg_id \
-             {} \
-             {} \
+             {join_clause} \
+             {where_clause} \
              group by m.source, m.block_height, m.block_timestamp, m.msg_id, m.owner, m.recipient, m.bundled_in, m.data_size, m.ts \
-             order by m.block_height {}, m.msg_id {} \
-             limit ? offset ?",
-            join_clause, where_clause, order_dir, order_dir
+             order by m.block_height {order_dir}, m.msg_id {order_dir} \
+             limit ? offset ?"
         );
         let mut query = self.client.query(&sql);
         for bind in binds {
@@ -920,11 +912,10 @@ impl AtlasIndexerClient {
                on filter.source = m.source and filter.block_height = m.block_height and filter.msg_id = m.msg_id \
              left join ao_token_message_tags t \
                on t.source = m.source and t.block_height = m.block_height and t.msg_id = m.msg_id \
-             where filter.tag_key = ? and filter.tag_value = ?{} \
+             where filter.tag_key = ? and filter.tag_value = ?{source_clause} \
              group by m.source, m.block_height, m.block_timestamp, m.msg_id, m.owner, m.recipient, m.bundled_in, m.data_size, m.ts \
              order by m.block_height desc, m.msg_id desc \
-             limit ?",
-            source_clause
+             limit ?"
         );
         let mut query = self.client.query(&sql).bind(tag_key).bind(tag_value);
         if let Some(src) = source {
@@ -1053,7 +1044,7 @@ async fn ensure_schema(
     client: &clickhouse::Client,
     database: &str,
 ) -> Result<(), Error> {
-    let create_db = format!("create database if not exists {}", database);
+    let create_db = format!("create database if not exists {database}");
     admin.query(&create_db).execute().await?;
     let stmts = [
         "create table if not exists oracle_snapshots(ts DateTime64(3), ticker String, tx_id String) engine=MergeTree order by (ticker, ts)",
@@ -1531,11 +1522,11 @@ fn format_quantity_human(value: u128) -> String {
     if frac == 0 {
         return whole.to_string();
     }
-    let mut frac_str = format!("{:012}", frac);
+    let mut frac_str = format!("{frac:012}");
     while frac_str.ends_with('0') {
         frac_str.pop();
     }
-    format!("{}.{}", whole, frac_str)
+    format!("{whole}.{frac_str}")
 }
 
 impl From<MainnetProgressRow> for MainnetProtocolInfo {

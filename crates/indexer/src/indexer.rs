@@ -29,17 +29,15 @@ use tokio::{
 };
 
 use crate::{
-    backfill,
-    backfill::run_mainnet_gap_worker,
     clickhouse::{
         AoTokenBlockStateRow, AoTokenMessageRow, AoTokenMessageTagRow, AtlasExplorerRow,
-        Clickhouse, DelegationMappingRow, FlpPositionRow, MainnetBlockMetricRow,
+        Clickhouse, DelegationMappingRow, FlpPositionRow,
         MainnetBlockStateRow, MainnetExplorerRow, MainnetMessageRow, MainnetMessageTagRow,
         OracleSnapshotRow, WalletBalanceRow, WalletDelegationRow,
     },
     config::Config,
 };
-use explorer;
+// use explorer;
 
 const ARWEAVE_TIP_SAFE_GAP: u64 = 3;
 
@@ -106,12 +104,12 @@ impl Indexer {
         Ok(())
     }
 
-    async fn reindex_mainnet_gap(&self, start: u32) -> Result<()> {
-        for protocol in [DataProtocol::A, DataProtocol::B] {
-            run_mainnet_gap_worker(self.clickhouse.clone(), protocol, start).await?;
-        }
-        Ok(())
-    }
+    // async fn reindex_mainnet_gap(&self, start: u32) -> Result<()> {
+    //     for protocol in [DataProtocol::A, DataProtocol::B] {
+    //         run_mainnet_gap_worker(self.clickhouse.clone(), protocol, start).await?;
+    //     }
+    //     Ok(())
+    // }
 
     async fn spawn_mainnet_indexer(&self) -> Result<()> {
         for (protocol, start) in [
@@ -137,8 +135,7 @@ impl Indexer {
         tokio::spawn(async move {
             if let Err(err) = run_ao_token_worker(clickhouse, AO_TOKEN_START).await {
                 eprintln!(
-                    "ao token indexer error start={} err={err:?}",
-                    AO_TOKEN_START
+                    "ao token indexer error start={AO_TOKEN_START} err={err:?}"
                 );
             }
         });
@@ -182,7 +179,7 @@ impl Indexer {
                 });
             }
             self.clickhouse.insert_mainnet_explorer_rows(&rows).await?;
-            println!("mainnet explorer indexed up to height {}", last_height);
+            println!("mainnet explorer indexed up to height {last_height}");
         }
         println!("ao mainnet explorer rebuild complete");
         Ok(())
@@ -345,15 +342,13 @@ fn delegated_amount(amount: &Decimal, factor: u32) -> Decimal {
 }
 
 async fn load_balances(ticker: String) -> Result<(String, Vec<SetBalancesData>)> {
-    Ok(
         tokio::task::spawn_blocking(move || -> Result<(String, Vec<SetBalancesData>)> {
             let oracle = OracleStakers::new(&ticker).build()?.send()?;
             let tx_id = oracle.clone().last_update()?;
             let data = parse_flp_balances_setting_res(&tx_id)?;
             Ok((tx_id, data))
         })
-        .await??,
-    )
+        .await?
 }
 
 async fn load_delegations(address: String) -> DelegationsRes {
@@ -372,7 +367,7 @@ async fn load_ar_balance(address: String) -> Decimal {
 }
 
 async fn fetch_latest_mapping_page(limit: u32) -> Result<DelegationMappingsPage> {
-    Ok(tokio::task::spawn_blocking(move || get_delegation_mappings(Some(limit), None)).await??)
+    tokio::task::spawn_blocking(move || get_delegation_mappings(Some(limit), None)).await?
 }
 
 async fn build_mapping_rows(meta: &DelegationMappingMeta) -> Result<Vec<DelegationMappingRow>> {
@@ -387,7 +382,7 @@ async fn build_mapping_rows(meta: &DelegationMappingMeta) -> Result<Vec<Delegati
     Ok(csv_rows
         .into_iter()
         .map(|row| DelegationMappingRow {
-            ts: ts.clone(),
+            ts,
             height,
             tx_id: tx_id.clone(),
             wallet_from: row.wallet_from,
@@ -414,8 +409,7 @@ async fn run_mainnet_worker(
         }
     }
     println!(
-        "mainnet protocol {} starting at height {}",
-        protocol_name, height
+        "mainnet protocol {protocol_name} starting at height {height}"
     );
     let mut network_tip = fetch_network_height().await.unwrap_or(height as u64);
     loop {
@@ -424,15 +418,12 @@ async fn run_mainnet_worker(
                 Ok(latest) => network_tip = latest,
                 Err(err) => {
                     eprintln!(
-                        "mainnet tip fetch error protocol={} err={err:?}",
-                        protocol_name
-                    );
+                        "mainnet tip fetch error protocol={protocol_name} err={err:?}"                    );
                 }
             }
             if height as u64 + ARWEAVE_TIP_SAFE_GAP > network_tip {
                 println!(
-                    "mainnet protocol {} waiting, height {} exceeds tip {} with gap {ARWEAVE_TIP_SAFE_GAP}",
-                    protocol_name, height, network_tip
+                    "mainnet protocol {protocol_name} waiting, height {height} exceeds tip {network_tip} with gap {ARWEAVE_TIP_SAFE_GAP}"
                 );
                 sleep(Duration::from_secs(60)).await;
             }
@@ -442,7 +433,7 @@ async fn run_mainnet_worker(
             Err(err) => {
                 if is_empty_block_error(&err) {
                     cursor = None;
-                    println!("mainnet protocol {} height {} empty", protocol_name, height);
+                    println!("mainnet protocol {protocol_name} height {height} empty");
                     let state_row = MainnetBlockStateRow {
                         updated_at: Utc::now(),
                         protocol: protocol_name.clone(),
@@ -453,8 +444,7 @@ async fn run_mainnet_worker(
                     height = height.saturating_add(1);
                 } else {
                     eprintln!(
-                        "mainnet fetch error protocol={} height={} err={err:?}",
-                        protocol_name, height
+                        "mainnet fetch error protocol={protocol_name} height={height} err={err:?}"
                     );
                     let delay = if is_rate_limit_error(&err) {
                         Duration::from_secs(5)
@@ -535,7 +525,7 @@ async fn run_ao_token_worker(clickhouse: Clickhouse, start: u32) -> Result<()> {
     if let Some(state) = clickhouse.fetch_ao_token_block_state().await? {
         height = state.last_complete_height.max(start).saturating_add(1);
     }
-    println!("ao token indexer starting at height {}", height);
+    println!("ao token indexer starting at height {height}");
     let mut network_tip = fetch_network_height().await.unwrap_or(height as u64);
     loop {
         while height as u64 + ARWEAVE_TIP_SAFE_GAP > network_tip {
@@ -547,8 +537,7 @@ async fn run_ao_token_worker(clickhouse: Clickhouse, start: u32) -> Result<()> {
             }
             if height as u64 + ARWEAVE_TIP_SAFE_GAP > network_tip {
                 println!(
-                    "ao token waiting, height {} exceeds tip {} with gap {ARWEAVE_TIP_SAFE_GAP}",
-                    height, network_tip
+                    "ao token waiting, height {height} exceeds tip {network_tip} with gap {ARWEAVE_TIP_SAFE_GAP}"
                 );
                 sleep(Duration::from_secs(60)).await;
             }
@@ -562,8 +551,7 @@ async fn run_ao_token_worker(clickhouse: Clickhouse, start: u32) -> Result<()> {
                 Err(err) => {
                     if is_rate_limit_error(&err) || is_timeout_error(&err) {
                         eprintln!(
-                            "ao token transfer query error height={} err={err:?}",
-                            height
+                            "ao token transfer query error height={height} err={err:?}"
                         );
                         sleep(Duration::from_secs(300)).await;
                         continue;
@@ -582,7 +570,7 @@ async fn run_ao_token_worker(clickhouse: Clickhouse, start: u32) -> Result<()> {
             Ok(count) => count,
             Err(err) => {
                 if is_rate_limit_error(&err) || is_timeout_error(&err) {
-                    eprintln!("ao token process query error height={} err={err:?}", height);
+                    eprintln!("ao token process query error height={height} err={err:?}");
                     sleep(Duration::from_secs(300)).await;
                     continue;
                 }
@@ -596,8 +584,7 @@ async fn run_ao_token_worker(clickhouse: Clickhouse, start: u32) -> Result<()> {
         };
         clickhouse.insert_ao_token_block_state(&[state_row]).await?;
         println!(
-            "ao token height {} stored {} transfers {} process msgs",
-            height, transfer_count, process_count
+            "ao token height {height} stored {transfer_count} transfers {process_count} process msgs"
         );
         height = height.saturating_add(1);
         sleep(Duration::from_secs(1)).await;
@@ -609,10 +596,10 @@ pub async fn fetch_mainnet_page(
     height: u32,
     cursor: Option<String>,
 ) -> Result<MainnetBlockMessagesPage> {
-    Ok(tokio::task::spawn_blocking(move || {
+    tokio::task::spawn_blocking(move || {
         scan_arweave_block_for_msgs(protocol, height, cursor.as_deref())
     })
-    .await??)
+    .await?
 }
 
 pub async fn fetch_ao_token_page(
@@ -620,15 +607,14 @@ pub async fn fetch_ao_token_page(
     height: u32,
     cursor: Option<String>,
 ) -> Result<AoTokenMessagesPage> {
-    Ok(tokio::task::spawn_blocking(move || {
+    tokio::task::spawn_blocking(move || {
         scan_arweave_block_for_ao_token_msgs(query, height, cursor.as_deref())
     })
-    .await??)
+    .await?
 }
 
 pub async fn fetch_network_height() -> Result<u64> {
-    let height = tokio::task::spawn_blocking(|| get_network_height()).await??;
-    Ok(height)
+    tokio::task::spawn_blocking(|| get_network_height()).await?
 }
 
 pub fn protocol_label(protocol: DataProtocol) -> &'static str {

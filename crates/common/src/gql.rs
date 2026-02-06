@@ -23,14 +23,14 @@ pub struct OracleMetadata {
 
 impl Oracle {
     pub fn resolve(&self) -> String {
-        match self {
-            &Oracle::USDS => format!("[\"{USDS_ORACLE_PID}\"]"),
-            &Oracle::DAI => format!("[\"{DAI_ORACLE_PID}\"]"),
-            &Oracle::STETH => format!("[\"{STETH_ORACLE_PID}\"]"),
-            &Oracle::All => {
+        match *self {
+            Oracle::USDS => format!("[\"{USDS_ORACLE_PID}\"]"),
+            Oracle::DAI => format!("[\"{DAI_ORACLE_PID}\"]"),
+            Oracle::STETH => format!("[\"{STETH_ORACLE_PID}\"]"),
+            Oracle::All => {
                 format!("[\"{USDS_ORACLE_PID}\", \"{DAI_ORACLE_PID}\", \"{STETH_ORACLE_PID}\"]")
             }
-            &Oracle::Unknown => String::new(),
+            Oracle::Unknown => String::new(),
         }
     }
 

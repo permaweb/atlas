@@ -1,5 +1,5 @@
 use anyhow::Result;
-use indexer::{backfill, clickhouse::Clickhouse, config::Config};
+// use indexer::{backfill, clickhouse::Clickhouse, config::Config};
 
 #[tokio::main]
 async fn main() -> Result<()> {
