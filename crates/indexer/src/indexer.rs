@@ -31,9 +31,9 @@ use tokio::{
 use crate::{
     clickhouse::{
         AoTokenBlockStateRow, AoTokenMessageRow, AoTokenMessageTagRow, AtlasExplorerRow,
-        Clickhouse, DelegationMappingRow, FlpPositionRow,
-        MainnetBlockStateRow, MainnetExplorerRow, MainnetMessageRow, MainnetMessageTagRow,
-        OracleSnapshotRow, WalletBalanceRow, WalletDelegationRow,
+        Clickhouse, DelegationMappingRow, FlpPositionRow, MainnetBlockStateRow, MainnetExplorerRow,
+        MainnetMessageRow, MainnetMessageTagRow, OracleSnapshotRow, WalletBalanceRow,
+        WalletDelegationRow,
     },
     config::Config,
 };
@@ -134,9 +134,7 @@ impl Indexer {
         let clickhouse = self.clickhouse.clone();
         tokio::spawn(async move {
             if let Err(err) = run_ao_token_worker(clickhouse, AO_TOKEN_START).await {
-                eprintln!(
-                    "ao token indexer error start={AO_TOKEN_START} err={err:?}"
-                );
+                eprintln!("ao token indexer error start={AO_TOKEN_START} err={err:?}");
             }
         });
         Ok(())
@@ -342,13 +340,13 @@ fn delegated_amount(amount: &Decimal, factor: u32) -> Decimal {
 }
 
 async fn load_balances(ticker: String) -> Result<(String, Vec<SetBalancesData>)> {
-        tokio::task::spawn_blocking(move || -> Result<(String, Vec<SetBalancesData>)> {
-            let oracle = OracleStakers::new(&ticker).build()?.send()?;
-            let tx_id = oracle.clone().last_update()?;
-            let data = parse_flp_balances_setting_res(&tx_id)?;
-            Ok((tx_id, data))
-        })
-        .await?
+    tokio::task::spawn_blocking(move || -> Result<(String, Vec<SetBalancesData>)> {
+        let oracle = OracleStakers::new(&ticker).build()?.send()?;
+        let tx_id = oracle.clone().last_update()?;
+        let data = parse_flp_balances_setting_res(&tx_id)?;
+        Ok((tx_id, data))
+    })
+    .await?
 }
 
 async fn load_delegations(address: String) -> DelegationsRes {
@@ -408,17 +406,14 @@ async fn run_mainnet_worker(
             height = height.saturating_add(1);
         }
     }
-    println!(
-        "mainnet protocol {protocol_name} starting at height {height}"
-    );
+    println!("mainnet protocol {protocol_name} starting at height {height}");
     let mut network_tip = fetch_network_height().await.unwrap_or(height as u64);
     loop {
         while height as u64 + ARWEAVE_TIP_SAFE_GAP > network_tip {
             match fetch_network_height().await {
                 Ok(latest) => network_tip = latest,
                 Err(err) => {
-                    eprintln!(
-                        "mainnet tip fetch error protocol={protocol_name} err={err:?}"                    );
+                    eprintln!("mainnet tip fetch error protocol={protocol_name} err={err:?}");
                 }
             }
             if height as u64 + ARWEAVE_TIP_SAFE_GAP > network_tip {
@@ -550,9 +545,7 @@ async fn run_ao_token_worker(clickhouse: Clickhouse, start: u32) -> Result<()> {
                 Ok(count) => count,
                 Err(err) => {
                     if is_rate_limit_error(&err) || is_timeout_error(&err) {
-                        eprintln!(
-                            "ao token transfer query error height={height} err={err:?}"
-                        );
+                        eprintln!("ao token transfer query error height={height} err={err:?}");
                         sleep(Duration::from_secs(300)).await;
                         continue;
                     }
