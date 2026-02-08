@@ -2,9 +2,12 @@ use anyhow::Result;
 use chrono::Utc;
 use common::{
     ao_token::{
-        AoTokenMessageMeta, AoTokenMessagesPage, AoTokenQuery, scan_arweave_block_for_ao_token_msgs,
+        AoTokenMessageMeta, AoTokenMessagesPage, AoTokenQuery, scan_arweave_block_for_token_msgs,
     },
-    constants::{AO_TOKEN_START, DATA_PROTOCOL_A_START, DATA_PROTOCOL_B_START},
+    constants::{
+        AO_TOKEN_PROCESS, AO_TOKEN_START, DATA_PROTOCOL_A_START, DATA_PROTOCOL_B_START,
+        PI_TOKEN_PROCESS, PI_TOKEN_START,
+    },
     delegation::{DelegationMappingMeta, DelegationMappingsPage, get_delegation_mappings},
     gateway::get_ar_balance,
     gql::OracleStakers,
@@ -41,6 +44,13 @@ use crate::{
 
 const ARWEAVE_TIP_SAFE_GAP: u64 = 3;
 
+#[derive(Clone, Copy)]
+struct TokenConfig {
+    label: &'static str,
+    process_id: &'static str,
+    start_height: u32,
+}
+
 pub struct Indexer {
     config: Config,
     clickhouse: Clickhouse,
@@ -61,7 +71,9 @@ impl Indexer {
         self.spawn_mainnet_explorer_tail().await?;
         // self.spawn_backfill();
         println!("indexer ready with tickers {:?}", self.config.tickers);
-        self.run_once().await?;
+        if let Err(err) = self.run_once().await {
+            eprintln!("index cycle error: {err:?}");
+        }
         let mut interval = tokio::time::interval(self.config.interval);
         loop {
             println!("waiting {:?}", self.config.interval);
@@ -74,9 +86,13 @@ impl Indexer {
     }
 
     async fn run_once(&self) -> Result<()> {
-        self.index_delegation_mappings().await?;
+        if let Err(err) = self.index_delegation_mappings().await {
+            eprintln!("delegation mapping error: {err:?}");
+        }
         for ticker in &self.config.tickers {
-            self.index_ticker(ticker).await?;
+            if let Err(err) = self.index_ticker(ticker).await {
+                eprintln!("ticker {ticker} error: {err:?}");
+            }
         }
         Ok(())
     }
@@ -131,12 +147,29 @@ impl Indexer {
     }
 
     async fn spawn_ao_token_indexer(&self) -> Result<()> {
-        let clickhouse = self.clickhouse.clone();
-        tokio::spawn(async move {
-            if let Err(err) = run_ao_token_worker(clickhouse, AO_TOKEN_START).await {
-                eprintln!("ao token indexer error start={AO_TOKEN_START} err={err:?}");
-            }
-        });
+        let tokens = [
+            TokenConfig {
+                label: "ao",
+                process_id: AO_TOKEN_PROCESS,
+                start_height: AO_TOKEN_START,
+            },
+            TokenConfig {
+                label: "pi",
+                process_id: PI_TOKEN_PROCESS,
+                start_height: PI_TOKEN_START,
+            },
+        ];
+        for token in tokens {
+            let clickhouse = self.clickhouse.clone();
+            tokio::spawn(async move {
+                if let Err(err) = run_token_worker(clickhouse, token).await {
+                    eprintln!(
+                        "token indexer error token={} start={} err={err:?}",
+                        token.label, token.start_height
+                    );
+                }
+            });
+        }
         Ok(())
     }
 
@@ -515,45 +548,64 @@ async fn run_mainnet_worker(
     }
 }
 
-async fn run_ao_token_worker(clickhouse: Clickhouse, start: u32) -> Result<()> {
-    let mut height = start;
-    if let Some(state) = clickhouse.fetch_ao_token_block_state().await? {
-        height = state.last_complete_height.max(start).saturating_add(1);
+async fn run_token_worker(clickhouse: Clickhouse, token: TokenConfig) -> Result<()> {
+    let mut height = token.start_height;
+    if let Some(state) = clickhouse.fetch_ao_token_block_state(token.label).await? {
+        height = state
+            .last_complete_height
+            .max(token.start_height)
+            .saturating_add(1);
     }
-    println!("ao token indexer starting at height {height}");
+    println!(
+        "token indexer {} starting at height {height}",
+        token.label
+    );
     let mut network_tip = fetch_network_height().await.unwrap_or(height as u64);
     loop {
         while height as u64 + ARWEAVE_TIP_SAFE_GAP > network_tip {
             match fetch_network_height().await {
                 Ok(latest) => network_tip = latest,
                 Err(err) => {
-                    eprintln!("ao token tip fetch error err={err:?}");
+                    eprintln!("token {} tip fetch error err={err:?}", token.label);
                 }
             }
             if height as u64 + ARWEAVE_TIP_SAFE_GAP > network_tip {
                 println!(
-                    "ao token waiting, height {height} exceeds tip {network_tip} with gap {ARWEAVE_TIP_SAFE_GAP}"
+                    "token {} waiting, height {height} exceeds tip {network_tip} with gap {ARWEAVE_TIP_SAFE_GAP}",
+                    token.label
                 );
                 sleep(Duration::from_secs(60)).await;
             }
         }
 
-        let transfer_count =
-            match ingest_ao_token_query(&clickhouse, AoTokenQuery::Transfer, height, "transfer")
-                .await
-            {
-                Ok(count) => count,
-                Err(err) => {
-                    if is_rate_limit_error(&err) || is_timeout_error(&err) {
-                        eprintln!("ao token transfer query error height={height} err={err:?}");
-                        sleep(Duration::from_secs(300)).await;
-                        continue;
-                    }
-                    return Err(err);
-                }
-            };
-        let process_count = match ingest_ao_token_query(
+        let transfer_count = match ingest_token_query(
             &clickhouse,
+            token,
+            AoTokenQuery::Transfer,
+            height,
+            "transfer",
+        )
+        .await
+        {
+            Ok(count) => count,
+            Err(err) => {
+                if is_rate_limit_error(&err)
+                    || is_timeout_error(&err)
+                    || is_retryable_http_error(&err)
+                {
+                    eprintln!(
+                        "token {} transfer query error height={height} err={err:?}",
+                        token.label
+                    );
+                    sleep(Duration::from_secs(300)).await;
+                    continue;
+                }
+                return Err(err);
+            }
+        };
+        let process_count = match ingest_token_query(
+            &clickhouse,
+            token,
             AoTokenQuery::Process,
             height,
             "process",
@@ -562,8 +614,14 @@ async fn run_ao_token_worker(clickhouse: Clickhouse, start: u32) -> Result<()> {
         {
             Ok(count) => count,
             Err(err) => {
-                if is_rate_limit_error(&err) || is_timeout_error(&err) {
-                    eprintln!("ao token process query error height={height} err={err:?}");
+                if is_rate_limit_error(&err)
+                    || is_timeout_error(&err)
+                    || is_retryable_http_error(&err)
+                {
+                    eprintln!(
+                        "token {} process query error height={height} err={err:?}",
+                        token.label
+                    );
                     sleep(Duration::from_secs(300)).await;
                     continue;
                 }
@@ -572,12 +630,14 @@ async fn run_ao_token_worker(clickhouse: Clickhouse, start: u32) -> Result<()> {
         };
 
         let state_row = AoTokenBlockStateRow {
+            token: token.label.to_string(),
             last_complete_height: height,
             updated_at: Utc::now(),
         };
         clickhouse.insert_ao_token_block_state(&[state_row]).await?;
         println!(
-            "ao token height {height} stored {transfer_count} transfers {process_count} process msgs"
+            "token {} height {height} stored {transfer_count} transfers {process_count} process msgs",
+            token.label
         );
         height = height.saturating_add(1);
         sleep(Duration::from_secs(1)).await;
@@ -596,12 +656,13 @@ pub async fn fetch_mainnet_page(
 }
 
 pub async fn fetch_ao_token_page(
+    process_id: &'static str,
     query: AoTokenQuery,
     height: u32,
     cursor: Option<String>,
 ) -> Result<AoTokenMessagesPage> {
     tokio::task::spawn_blocking(move || {
-        scan_arweave_block_for_ao_token_msgs(query, height, cursor.as_deref())
+        scan_arweave_block_for_token_msgs(process_id, query, height, cursor.as_deref())
     })
     .await?
 }
@@ -631,8 +692,21 @@ fn is_timeout_error(err: &anyhow::Error) -> bool {
     msg.contains("timeout") || msg.contains("timed out")
 }
 
-async fn ingest_ao_token_query(
+fn is_retryable_http_error(err: &anyhow::Error) -> bool {
+    let msg = err.to_string();
+    let Some(status_part) = msg.split("http status: ").nth(1) else {
+        return false;
+    };
+    let status_text = status_part.split_whitespace().next().unwrap_or("");
+    let Ok(status) = status_text.parse::<u16>() else {
+        return false;
+    };
+    (500..600).contains(&status)
+}
+
+async fn ingest_token_query(
     clickhouse: &Clickhouse,
+    token: TokenConfig,
     query: AoTokenQuery,
     height: u32,
     source: &str,
@@ -640,7 +714,7 @@ async fn ingest_ao_token_query(
     let mut cursor = None;
     let mut total = 0usize;
     loop {
-        let page = fetch_ao_token_page(query, height, cursor.clone()).await?;
+        let page = fetch_ao_token_page(token.process_id, query, height, cursor.clone()).await?;
         let ts = Utc::now();
         let mut message_rows = Vec::with_capacity(page.mappings.len());
         let mut tag_rows = Vec::new();
@@ -658,6 +732,7 @@ async fn ingest_ao_token_query(
             let msg_id_for_tags = msg_id.clone();
             message_rows.push(AoTokenMessageRow {
                 ts,
+                token: token.label.to_string(),
                 source: source.to_string(),
                 block_height,
                 block_timestamp,
@@ -670,6 +745,7 @@ async fn ingest_ao_token_query(
             for tag in tags {
                 tag_rows.push(AoTokenMessageTagRow {
                     ts,
+                    token: token.label.to_string(),
                     source: source.to_string(),
                     block_height,
                     msg_id: msg_id_for_tags.clone(),
