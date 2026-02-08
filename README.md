@@ -51,21 +51,21 @@ we label them as type A and type B:
 >- type A start blockheight: 1_594_020 -- Jan 22 2025
 >- type B start blockheight: 1_616_999 --  Feb 25 2025
 
-AO token messages (ao.TN.1):
-- `GET /token/ao/info` - returns the $AO token indexer info
-- `GET /token/ao/txs?order=asc|desc` - list AO token messages (indexed) - ordering by blockheight.
-- `GET /token/ao/txs/{msg_id}` - message by id (includes tags).
-- `GET /token/ao/txs/tags?key=<TAG_NAME>&value=<TAG_VALUE>&source=<transfer|process>&limit=<N>` - filter AO token messages by tag.
-- `GET /token/ao/top/frequency?limit=<N>` - counts per Action + top Sender/Recipient frequencies.
-- `GET /token/ao/top/richlist?limit=<N>` - top spenders/receivers by Quantity (12 decimals)
+Token messages (ao.TN.1):
+- `GET /token/{token}/info` - returns token indexer info (`token`: `ao`, `pi`)
+- `GET /token/{token}/txs?order=asc|desc` - list token messages (indexed) - ordering by blockheight.
+- `GET /token/{token}/txs/{msg_id}` - message by id (includes tags).
+- `GET /token/{token}/txs/tags?key=<TAG_NAME>&value=<TAG_VALUE>&source=<transfer|process>&limit=<N>` - filter token messages by tag.
+- `GET /token/{token}/frequency?limit=<N>` - counts per Action + top Sender/Recipient frequencies.
+- `GET /token/{token}/top/richlist?limit=<N>` - top spenders/receivers by Quantity (12 decimals)
 
-> ***AO token N.B***
+> ***Token N.B***
 > amount filters use human units (12 decimals) and are applied against the `Quantity` tag.
 
-Example AO token filters:
+Example token filters:
 - `GET /token/ao/txs?source=transfer&action=Transfer&min_amount=1.5&max_amount=10`
-- `GET /token/ao/txs?action=Debit-Notice&from_ts=1739059000&to_ts=1739062000`
-- `GET /token/ao/txs?block_min=1606020&block_max=1606040&recipient=<AO_ADDRESS>`
+- `GET /token/ao/txs?action=Debit-Ntoken indexer error token=pi start=1638421 err=http status: 504otice&from_ts=1739059000&to_ts=1739062000`
+- `GET /token/pi/txs?block_min=1638421&block_max=1639000&recipient=<AR_ADDRESS>`
 
 ## Using the workspace crates in Rust
 

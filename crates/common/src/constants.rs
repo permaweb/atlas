@@ -10,6 +10,8 @@ pub const AO_AUTHORITY: &str = "fcoN_xJeisVsPXA-trzVAuIiqO3ydLQxM-L4XbrQKzY";
 pub const DELEGATION_PID: &str = "cuxSKjGJ-WDB9PzSkVkVVrIBSh3DrYHYz44usQOj5yE";
 pub const AO_TOKEN_PROCESS: &str = "0syT13r0s0tgPmIed95bJnuSqaD29HQNN8D3ElLSrsc";
 pub const AO_TOKEN_START: u32 = 1_606_012;
+pub const PI_TOKEN_PROCESS: &str = "4hXj_E-5fAKmo4E8KjgQvuDJKAFk9P2grhycVmISDLs";
+pub const PI_TOKEN_START: u32 = 1_638_421;
 // ao mainnet data protocols
 // the mainnet have 2 type of tags for mainnet txs,
 // type A follows lower-case tags key format

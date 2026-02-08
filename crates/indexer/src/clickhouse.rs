@@ -41,9 +41,9 @@ impl Clickhouse {
             "create table if not exists ao_mainnet_messages(ts DateTime64(3), protocol String, block_height UInt32, block_timestamp UInt64, msg_id String, owner String, recipient String, bundled_in String, data_size String) engine=ReplacingMergeTree order by (protocol, block_height, msg_id)",
             "create table if not exists ao_mainnet_message_tags(ts DateTime64(3), protocol String, block_height UInt32, msg_id String, tag_key String, tag_value String) engine=ReplacingMergeTree order by (tag_key, tag_value, block_height, msg_id)",
             "create table if not exists ao_mainnet_block_state(protocol String, last_complete_height UInt32, last_cursor String, updated_at DateTime64(3)) engine=ReplacingMergeTree order by protocol",
-            "create table if not exists ao_token_messages(ts DateTime64(3), source String, block_height UInt32, block_timestamp UInt64, msg_id String, owner String, recipient String, bundled_in String, data_size String) engine=ReplacingMergeTree order by (source, block_height, msg_id)",
-            "create table if not exists ao_token_message_tags(ts DateTime64(3), source String, block_height UInt32, msg_id String, tag_key String, tag_value String) engine=ReplacingMergeTree order by (source, tag_key, tag_value, block_height, msg_id)",
-            "create table if not exists ao_token_block_state(last_complete_height UInt32, updated_at DateTime64(3)) engine=ReplacingMergeTree order by updated_at",
+            "create table if not exists ao_token_messages(ts DateTime64(3), token String, source String, block_height UInt32, block_timestamp UInt64, msg_id String, owner String, recipient String, bundled_in String, data_size String) engine=ReplacingMergeTree order by (token, source, block_height, msg_id)",
+            "create table if not exists ao_token_message_tags(ts DateTime64(3), token String, source String, block_height UInt32, msg_id String, tag_key String, tag_value String) engine=ReplacingMergeTree order by (token, source, tag_key, tag_value, block_height, msg_id)",
+            "create table if not exists ao_token_block_state(token String, last_complete_height UInt32, updated_at DateTime64(3)) engine=ReplacingMergeTree order by (token, updated_at)",
         ];
         for stmt in stmts {
             self.client.query(stmt).execute().await?;
@@ -55,6 +55,9 @@ impl Clickhouse {
             "alter table flp_positions add column if not exists ar_amount String after amount",
             "alter table flp_positions modify column project String",
             "alter table delegation_mappings add column if not exists ts DateTime64(3) default now()",
+            "alter table ao_token_messages add column if not exists token String default 'ao'",
+            "alter table ao_token_message_tags add column if not exists token String default 'ao'",
+            "alter table ao_token_block_state add column if not exists token String default 'ao'",
         ];
         for stmt in alters {
             self.client.query(stmt).execute().await?;
@@ -189,15 +192,21 @@ impl Clickhouse {
         Ok(rows.into_iter().next())
     }
 
-    pub async fn fetch_ao_token_block_state(&self) -> Result<Option<AoTokenBlockStateRow>> {
+    pub async fn fetch_ao_token_block_state(
+        &self,
+        token: &str,
+    ) -> Result<Option<AoTokenBlockStateRow>> {
         let rows = self
             .client
             .query(
-                "select last_complete_height, updated_at \
-                 from ao_token_block_state \
-                 order by updated_at desc \
-                 limit 1",
+                "select token, \
+                    argMax(last_complete_height, s.updated_at) as last_complete_height, \
+                    max(s.updated_at) as updated_at \
+                 from ao_token_block_state as s \
+                 where token = ? \
+                 group by token",
             )
+            .bind(token)
             .fetch_all::<AoTokenBlockStateRow>()
             .await?;
         Ok(rows.into_iter().next())
@@ -356,6 +365,7 @@ pub struct MainnetMessageTagRow {
 pub struct AoTokenMessageRow {
     #[serde(with = "clickhouse::serde::chrono::datetime64::millis")]
     pub ts: DateTime<Utc>,
+    pub token: String,
     pub source: String,
     pub block_height: u32,
     pub block_timestamp: u64,
@@ -370,6 +380,7 @@ pub struct AoTokenMessageRow {
 pub struct AoTokenMessageTagRow {
     #[serde(with = "clickhouse::serde::chrono::datetime64::millis")]
     pub ts: DateTime<Utc>,
+    pub token: String,
     pub source: String,
     pub block_height: u32,
     pub msg_id: String,
@@ -379,6 +390,7 @@ pub struct AoTokenMessageTagRow {
 
 #[derive(Clone, Debug, Row, Serialize, Deserialize)]
 pub struct AoTokenBlockStateRow {
+    pub token: String,
     pub last_complete_height: u32,
     #[serde(with = "clickhouse::serde::chrono::datetime64::millis")]
     pub updated_at: DateTime<Utc>,
