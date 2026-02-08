@@ -34,7 +34,8 @@ pub struct AoTokenMessagesPage {
     pub end_cursor: Option<String>,
 }
 
-pub fn scan_arweave_block_for_ao_token_msgs(
+pub fn scan_arweave_block_for_token_msgs(
+    process_id: &str,
     query: AoTokenQuery,
     blockheight: u32,
     after: Option<&str>,
@@ -42,13 +43,13 @@ pub fn scan_arweave_block_for_ao_token_msgs(
     let (filter_clause, query_label) = match query {
         AoTokenQuery::Transfer => (
             format!(
-                "owners: [\"{AO_AUTHORITY}\"]\n    recipients: [\"{AO_TOKEN_PROCESS}\"]\n    tags: [{{ name: \"Action\", values: [\"Transfer\"] }}]"
+                "owners: [\"{AO_AUTHORITY}\"]\n    recipients: [\"{process_id}\"]\n    tags: [{{ name: \"Action\", values: [\"Transfer\"] }}]"
             ),
             "aoTokenTransfers",
         ),
         AoTokenQuery::Process => (
             format!(
-                "owners: [\"{AO_AUTHORITY}\"]\n    tags: [{{ name: \"From-Process\", values: [\"{AO_TOKEN_PROCESS}\"] }}]"
+                "owners: [\"{AO_AUTHORITY}\"]\n    tags: [{{ name: \"From-Process\", values: [\"{process_id}\"] }}]"
             ),
             "aoTokenProcessMsgs",
         ),
@@ -216,6 +217,14 @@ query $querylabel {
         has_next_page,
         end_cursor: last_cursor,
     })
+}
+
+pub fn scan_arweave_block_for_ao_token_msgs(
+    query: AoTokenQuery,
+    blockheight: u32,
+    after: Option<&str>,
+) -> Result<AoTokenMessagesPage, Error> {
+    scan_arweave_block_for_token_msgs(AO_TOKEN_PROCESS, query, blockheight, after)
 }
 
 fn has_action_transfer(tags: &[Tag]) -> bool {
