@@ -607,11 +607,11 @@ async fn run_token_worker(clickhouse: Clickhouse, token: TokenConfig) -> Result<
             {
                 Ok(count) => count,
                 Err(err) => {
-                if is_rate_limit_error(&err)
-                    || is_timeout_error(&err)
-                    || is_retryable_http_error(&err)
-                    || is_not_found_error(&err)
-                {
+                    if is_rate_limit_error(&err)
+                        || is_timeout_error(&err)
+                        || is_retryable_http_error(&err)
+                        || is_not_found_error(&err)
+                    {
                         eprintln!(
                             "token {} process query error height={height} err={err:?}",
                             token.label
