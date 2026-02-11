@@ -58,6 +58,7 @@ EXPOSE 8000
 # Environment variables
 ENV RUST_LOG=info
 ENV RUST_BACKTRACE=1
+ENV ATLAS_CONFIG=/app/atlas.toml
 
 # Start with cargo shuttle run
 CMD ["cargo", "run", "--bin", "server"]
