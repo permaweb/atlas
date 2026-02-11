@@ -17,6 +17,9 @@ jobs:
       image_name: load-atlas
       kube_namespace: business
       runner_labels: '["self-hosted","linux","x64"]'
+      wait_for_rollout: true
+      delete_old_pods: true
+      rollout_timeout: 10m
       rollout_resources: |
         deployment/load-atlas
       cluster_host: ${{ vars.MAIN_CLUSTER_HOST }}
