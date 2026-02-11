@@ -83,7 +83,8 @@ pub async fn parse_set_balance_report(Path(id): Path<String>) -> Result<Json<Val
 pub async fn get_wallet_delegations_handler(
     Path(address): Path<String>,
 ) -> Result<Json<Value>, ServerError> {
-    let res = get_wallet_delegations(&address).unwrap();
+    let res = get_wallet_delegations(&address)
+        .map_err(|err| ServerError::from(anyhow!("wallet delegations error: {err}")))?;
     Ok(Json(serde_json::to_value(&res)?))
 }
 

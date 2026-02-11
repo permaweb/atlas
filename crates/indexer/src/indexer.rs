@@ -277,7 +277,7 @@ impl Indexer {
             }])
             .await?;
 
-        let pairs: Vec<(SetBalancesData, DelegationsRes, Decimal)> =
+        let pairs: Vec<(SetBalancesData, Option<DelegationsRes>, Decimal)> =
             stream::iter(balances.into_iter().map(|entry| async move {
                 let delegation = load_delegations(entry.ar_address.clone()).await;
                 let ar_balance = load_ar_balance(entry.ar_address.clone()).await;
@@ -286,13 +286,17 @@ impl Indexer {
             .buffer_unordered(self.config.concurrency)
             .collect()
             .await;
-        println!("ticker {ticker}: delegations {}", pairs.len());
+        let delegations_count = pairs.iter().filter(|(_, d, _)| d.is_some()).count();
+        println!("ticker {ticker}: delegations {}", delegations_count);
 
         let mut balance_rows = Vec::with_capacity(pairs.len());
-        let mut delegation_rows = Vec::with_capacity(pairs.len());
+        let mut delegation_rows = Vec::with_capacity(delegations_count);
         let mut position_rows = Vec::new();
 
         for (entry, delegation, ar_balance) in pairs {
+            let Some(delegation) = delegation else {
+                continue;
+            };
             let Some(amount_dec) = normalize_amount(&entry.amount, &ticker_owned) else {
                 continue;
             };
@@ -405,11 +409,14 @@ async fn load_balances(ticker: String) -> Result<(String, Vec<SetBalancesData>)>
     .await?
 }
 
-async fn load_delegations(address: String) -> DelegationsRes {
+async fn load_delegations(address: String) -> Option<DelegationsRes> {
     let fallback = address.clone();
     match tokio::task::spawn_blocking(move || get_wallet_delegations(&address)).await {
-        Ok(Ok(data)) => data,
-        _ => DelegationsRes::pi_default(&fallback),
+        Ok(Ok(data)) => Some(data),
+        _ => {
+            eprintln!("delegation lookup failed for {fallback}, skipping");
+            None
+        }
     }
 }
 
