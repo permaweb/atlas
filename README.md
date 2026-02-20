@@ -73,8 +73,8 @@ Example token filters:
 
 ```toml
 [dependencies]
-atlas-common = { package = "common", git = "https://github.com/loadnetwork/atlas" }
-atlas-flp = { package = "flp", git = "https://github.com/loadnetwork/atlas" }
+atlas-common = { package = "common", git = "https://github.com/permaweb/atlas" }
+atlas-flp = { package = "flp", git = "https://github.com/permaweb/atlas" }
 ```
 
 Examples:
@@ -92,12 +92,20 @@ let tx_id = oracle.last_update()?;
 use flp::wallet::get_wallet_delegations;
 let prefs = get_wallet_delegations("wallet_ar_address")?;
 ```
-
 ## License
-Licensed at your option under either of:
 
-* [Apache License, Version 2.0](./LICENSE-APACHE)
-* [MIT License](./LICENSE-MIT)
+#### for releases up to [v0.4.2](https://github.com/loadnetwork/atlas/releases/tag/v0.4.2)
+Licensed at your option under either of:
+ * [Apache License, Version 2.0](LICENSE-APACHE)
+ * [MIT License](LICENSE-MIT)
+
+#### for releases after v0.4.2
+* [MIT License](LICENSE-MIT)
 
 ## Contribution
-Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in the work by you, as defined in the Apache-2.0 license, shall be dual licensed as above, without any additional terms or conditions.
+
+Unless you explicitly state otherwise, any contribution intentionally submitted
+for inclusion in the work by you will be licensed under the [MIT License](./LICENSE-MIT)
+
+## Credits
+This repository was initially developed by the [Decent Land Labs](https://decent.land) team and is currently maintained and continuously developed by the Permaweb team.
