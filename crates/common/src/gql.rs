@@ -17,7 +17,8 @@ pub enum Oracle {
 
 #[derive(PartialEq, Clone, Debug)]
 pub struct OracleMetadata {
-    pub ao_pid: String,
+    pub ao_pid_legacy: String,
+    pub ao_pid_mainnet: String,
     pub evm_address: String,
 }
 
@@ -37,16 +38,19 @@ impl Oracle {
     pub fn metadata(&self) -> Result<OracleMetadata, Error> {
         match self {
             Oracle::USDS => Ok(OracleMetadata {
-                ao_pid: USDS_ORACLE_PID.to_string(),
+                ao_pid_mainnet: USDS_ORACLE_PID.to_string(),
                 evm_address: USDS_STAKING_ADDRESS.to_string(),
+                ao_pid_legacy: USDS_ORACLE_PID.to_string(),
             }),
             Oracle::DAI => Ok(OracleMetadata {
-                ao_pid: DAI_ORACLE_PID.to_string(),
+                ao_pid_mainnet: DAI_ORACLE_PID.to_string(),
                 evm_address: DAI_STAKING_ADDRESS.to_string(),
+                ao_pid_legacy: DAI_ORACLE_PID.to_string()
             }),
             Oracle::STETH => Ok(OracleMetadata {
-                ao_pid: STETH_ORACLE_PID.to_string(),
+                ao_pid_mainnet: STETH_ORACLE_PID.to_string(),
                 evm_address: STETH_STAKING_ADDRESS.to_string(),
+                ao_pid_legacy: STETH_ORACLE_PID.to_string()
             }),
             _ => Err(anyhow!("metadata not supported for this oracle type")),
         }
