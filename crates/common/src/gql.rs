@@ -1,5 +1,6 @@
 use crate::constants::{
-    AO_AUTHORITY, DAI_ORACLE_PID, DAI_STAKING_ADDRESS, STETH_ORACLE_PID, STETH_STAKING_ADDRESS,
+    DAI_ORACLE_MAINNET_PID, DAI_ORACLE_PID, DAI_STAKING_ADDRESS, FLP_AUTHORITY_MAINNET,
+    STETH_ORACLE_MAINNET_PID, STETH_ORACLE_PID, STETH_STAKING_ADDRESS, USDS_ORACLE_MAINNET_PID,
     USDS_ORACLE_PID, USDS_STAKING_ADDRESS, arweave_gateway,
 };
 pub use crate::delegation::{get_user_delegation_txid, get_user_last_delegation_txid};
@@ -25,11 +26,13 @@ pub struct OracleMetadata {
 impl Oracle {
     pub fn resolve(&self) -> String {
         match *self {
-            Oracle::USDS => format!("[\"{USDS_ORACLE_PID}\"]"),
-            Oracle::DAI => format!("[\"{DAI_ORACLE_PID}\"]"),
-            Oracle::STETH => format!("[\"{STETH_ORACLE_PID}\"]"),
+            Oracle::USDS => format!("[\"{USDS_ORACLE_MAINNET_PID}\"]"),
+            Oracle::DAI => format!("[\"{DAI_ORACLE_MAINNET_PID}\"]"),
+            Oracle::STETH => format!("[\"{STETH_ORACLE_MAINNET_PID}\"]"),
             Oracle::All => {
-                format!("[\"{USDS_ORACLE_PID}\", \"{DAI_ORACLE_PID}\", \"{STETH_ORACLE_PID}\"]")
+                format!(
+                    "[\"{USDS_ORACLE_MAINNET_PID}\", \"{DAI_ORACLE_MAINNET_PID}\", \"{STETH_ORACLE_MAINNET_PID}\"]"
+                )
             }
             Oracle::Unknown => String::new(),
         }
@@ -38,19 +41,19 @@ impl Oracle {
     pub fn metadata(&self) -> Result<OracleMetadata, Error> {
         match self {
             Oracle::USDS => Ok(OracleMetadata {
-                ao_pid_mainnet: USDS_ORACLE_PID.to_string(),
+                ao_pid_mainnet: USDS_ORACLE_MAINNET_PID.to_string(),
                 evm_address: USDS_STAKING_ADDRESS.to_string(),
                 ao_pid_legacy: USDS_ORACLE_PID.to_string(),
             }),
             Oracle::DAI => Ok(OracleMetadata {
-                ao_pid_mainnet: DAI_ORACLE_PID.to_string(),
+                ao_pid_mainnet: DAI_ORACLE_MAINNET_PID.to_string(),
                 evm_address: DAI_STAKING_ADDRESS.to_string(),
-                ao_pid_legacy: DAI_ORACLE_PID.to_string()
+                ao_pid_legacy: DAI_ORACLE_PID.to_string(),
             }),
             Oracle::STETH => Ok(OracleMetadata {
-                ao_pid_mainnet: STETH_ORACLE_PID.to_string(),
+                ao_pid_mainnet: STETH_ORACLE_MAINNET_PID.to_string(),
                 evm_address: STETH_STAKING_ADDRESS.to_string(),
-                ao_pid_legacy: STETH_ORACLE_PID.to_string()
+                ao_pid_legacy: STETH_ORACLE_PID.to_string(),
             }),
             _ => Err(anyhow!("metadata not supported for this oracle type")),
         }
@@ -115,8 +118,8 @@ impl OracleStakers {
         sort: HEIGHT_DESC
         owners: ["$ownervar"]
         tags: [
-        { name: "Action", values: ["Set-Balances"] },
-        {name: "From-Process", values: $oraclevar }
+        { name: "action", values: ["Set-Balances"] },
+        {name: "from-process", values: $oraclevar }
         ]
     ) {
         edges {
@@ -146,11 +149,11 @@ impl OracleStakers {
         // formatting as arweave.net doesnt support dynamic vars on server level
         let query = template
             .replace("$firstvar", &first_var.to_string())
-            .replace("$ownervar", AO_AUTHORITY)
+            .replace("$ownervar", FLP_AUTHORITY_MAINNET)
             .replace("$oraclevar", &self.oracle.resolve());
 
         let vars = json!({
-            "owner": AO_AUTHORITY,
+            "owner": FLP_AUTHORITY_MAINNET,
             "oracle": self.oracle.resolve()
         });
 
