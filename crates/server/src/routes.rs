@@ -124,7 +124,7 @@ pub async fn get_oracle_feed(Path(ticker): Path<String>) -> Result<Json<Value>, 
     let feed = client.oracle_snapshot_feed(&ticker, 25).await?;
     let metadata = OracleStakers::new(&ticker).oracle.metadata()?;
     let res = json!({
-        "oracle_pid": metadata.ao_pid,
+        "oracle_pid": metadata.ao_pid_mainnet,
         "oracle_evm_address": metadata.evm_address,
         "recent_indexed_feeds": feed
     });
